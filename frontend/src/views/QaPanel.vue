@@ -1,16 +1,30 @@
 <script setup lang="ts">
 import { ref, onUnmounted } from 'vue';
 
+interface SourceReference {
+  /** 文档名称 */
+  docName: string;
+  /** 引用片段 */
+  snippet: string;
+  /** 相似度得分（0~1） */
+  score?: number;
+}
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   streaming?: boolean;
+  /** RAG 引用来源，接入向量检索后填充 */
+  sources?: SourceReference[];
 }
 
 const messages = ref<Message[]>([]);
 const inputText = ref('');
 const isLoading = ref(false);
 const errorMsg = ref('');
+
+/** 是否展示引用来源面板（调试用，等 RAG 接入后自动展示） */
+const showSources = ref(false);
 
 // 当前流式控制器，用于取消请求
 let currentController: AbortController | null = null;
@@ -82,6 +96,10 @@ async function sendMessage() {
           } else if (event === 'done') {
             // 流结束，如果有 fullContent 则以它为准
             if (json.fullContent) aiMsg.content = json.fullContent;
+            // RAG 引用来源（等后端接入向量检索后返回）
+            if (json.sources && Array.isArray(json.sources)) {
+              aiMsg.sources = json.sources;
+            }
             aiMsg.streaming = false;
           } else if (event === 'error') {
             errorMsg.value = json.message || '服务出错';
@@ -133,6 +151,15 @@ onUnmounted(() => {
         <div class="message-role">{{ msg.role === 'user' ? '你' : 'AI 导览员' }}</div>
         <div class="message-content">
           <span v-if="msg.streaming" class="cursor">▋</span>{{ msg.content }}
+        </div>
+        <!-- RAG 引用来源展示 -->
+        <div v-if="msg.sources && msg.sources.length > 0" class="sources">
+          <div class="sources-title">参考来源</div>
+          <div v-for="(src, j) in msg.sources" :key="j" class="source-item">
+            <div class="source-doc">{{ src.docName }}</div>
+            <div class="source-snippet">{{ src.snippet }}</div>
+            <div v-if="src.score !== undefined" class="source-score">相似度: {{ (src.score * 100).toFixed(1) }}%</div>
+          </div>
         </div>
       </div>
 
@@ -301,5 +328,45 @@ textarea:focus {
 .btn.cancel {
   background: #f44336;
   color: #fff;
+}
+
+/* RAG 引用来源样式 */
+.sources {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #e0e0e0;
+}
+
+.sources-title {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.source-item {
+  background: #f5f5f5;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.source-doc {
+  color: #1976d2;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.source-snippet {
+  color: #555;
+  line-height: 1.4;
+}
+
+.source-score {
+  color: #999;
+  font-size: 11px;
+  margin-top: 4px;
+  text-align: right;
 }
 </style>
