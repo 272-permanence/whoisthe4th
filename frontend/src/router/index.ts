@@ -13,6 +13,11 @@ const routes = [
     component: () => import('../views/Home.vue')
   },
   {
+    path: '/interaction',
+    name: 'interaction',
+    component: () => import('../views/InteractionView.vue')
+  },
+  {
     path: '/dashboard',
     name: 'dashboard',
     component: () => import('../views/Dashboard.vue')
