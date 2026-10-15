@@ -11,6 +11,7 @@ import { config } from './config.js';
 import chatRouter from './routes/chat.js';
 import analyticsRouter from './analytics/routes.js';
 import asrTtsRouter from './routes/asrTts.js';
+import kbRouter from './routes/kb.js';
 import { ErrorCodeEnum } from './constants/errorCodes.js';
 import { HttpError } from './utils/httpError.js';
 
@@ -27,6 +28,7 @@ app.use(express.json());
 app.use('/api/v1/chat', chatRouter);
 app.use('/api/v1/analytics', analyticsRouter);
 app.use('/api/v1/asr-tts', asrTtsRouter);
+app.use('/api/v1/kb', kbRouter);
 
 // 健康检查接口
 app.get('/health', (_req, res) => {

@@ -26,6 +26,11 @@ const routes = [
     path: '/dashboard',
     name: 'dashboard',
     component: () => import('../views/Dashboard.vue')
+  },
+  {
+    path: '/admin/kb',
+    name: 'admin-kb',
+    component: () => import('../views/admin/KnowledgeBaseAdmin.vue')
   }
 ];
 

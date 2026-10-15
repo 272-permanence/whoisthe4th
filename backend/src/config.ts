@@ -8,6 +8,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
+import { KB_EMBEDDING_DIMENSION } from './constants/kbConstants.js';
 
 dotenv.config();
 
@@ -31,6 +32,8 @@ const DEFAULT_TTS_MOCK_SAMPLE_RATE = 24_000;
 const DEFAULT_DASHSCOPE_MODEL = 'qwen-plus';
 /** DashScope OpenAI 兼容端点（中国区） */
 const DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
+/** 知识库默认向量模型（需与成员B 的 RAG 链路保持一致） */
+const DEFAULT_EMBEDDING_MODEL = 'bge-m3';
 
 /** ASR 提供方：mock 离线桩 / whisper-api 远程接口 / whisper-cli 本地 Whisper 可执行程序 */
 export type AsrProvider = 'mock' | 'whisper-api' | 'whisper-cli';
@@ -104,5 +107,17 @@ export const config = {
     pitch: readText('TTS_PITCH', DEFAULT_TTS_PITCH),
     /** mock 提供方生成的音频采样率 */
     mockSampleRate: readInt('TTS_MOCK_SAMPLE_RATE', DEFAULT_TTS_MOCK_SAMPLE_RATE)
-  }
+  },
+
+  // 知识库（成员C）：向量库与向量化服务配置
+  /** Qdrant 服务地址，留空则使用进程内内存向量库 */
+  qdrantUrl: readText('QDRANT_URL', ''),
+  /** 向量服务地址（OpenAI 兼容接口），留空则使用本地确定性伪向量 */
+  embeddingApiUrl: readText('EMBEDDING_API_URL', ''),
+  /** 向量服务访问凭证 */
+  embeddingApiKey: readText('EMBEDDING_API_KEY', ''),
+  /** 向量模型名，需与成员B 的 RAG 链路保持一致 */
+  embeddingModel: readText('EMBEDDING_MODEL', DEFAULT_EMBEDDING_MODEL),
+  /** 向量维度，需与成员B 的 RAG 链路保持一致 */
+  embeddingDimension: readInt('EMBEDDING_DIMENSION', KB_EMBEDDING_DIMENSION)
 } as const;

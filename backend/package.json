@@ -8,11 +8,14 @@
     "start": "node dist/app.js"
   },
   "dependencies": {
+    "@langchain/textsplitters": "^1.0.2",
     "better-sqlite3": "^13.0.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^4.21.0",
-    "multer": "^2.4.0"
+    "mammoth": "^1.13.0",
+    "multer": "^2.4.0",
+    "pdf-parse": "^2.4.5"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
