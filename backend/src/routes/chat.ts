@@ -31,7 +31,7 @@ router.post('/stream', async (req: Request, res: Response) => {
   res.setHeader('Access-Control-Allow-Origin', config.frontendUrl);
   res.setHeader('X-Accel-Buffering', 'no'); // 禁用 Nginx 缓冲
 
-  // 心跳保活
+  // 心跳保活（25 秒一次，防止代理/负载均衡器超时断开）
   const heartbeat = setInterval(() => {
     res.write(': heartbeat\n\n');
   }, 25000);
