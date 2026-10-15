@@ -13,6 +13,11 @@ const routes = [
     component: () => import('../views/Home.vue')
   },
   {
+    path: '/qa',
+    name: 'qa-panel',
+    component: () => import('../views/QaPanel.vue')
+  },
+  {
     path: '/dashboard',
     name: 'dashboard',
     component: () => import('../views/Dashboard.vue')
