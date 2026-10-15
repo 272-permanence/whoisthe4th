@@ -24,3 +24,6 @@ logs/
 .idea/
 .vscode/
 *.swp
+
+# 知识库上传文件
+uploads/

@@ -3,6 +3,7 @@ import cors from 'cors';
 import { config } from './config.js';
 import chatRouter from './routes/chat.js';
 import analyticsRouter from './analytics/routes.js';
+import kbRouter from './routes/kb.js';
 
 const app = express();
 
@@ -16,6 +17,7 @@ app.use(express.json());
 // 路由挂载
 app.use('/api/v1/chat', chatRouter);
 app.use('/api/v1/analytics', analyticsRouter);
+app.use('/api/v1/kb', kbRouter);
 
 // 健康检查接口
 app.get('/health', (req, res) => {
