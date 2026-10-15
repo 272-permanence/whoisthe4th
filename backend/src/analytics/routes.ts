@@ -65,17 +65,16 @@ router.get('/stats', (_req: Request, res: Response) => {
  * GET /api/v1/analytics/stream
  * SSE 实时推送统计数据
  */
-router.get('/stream', (req: Request, res: Response) => {
+router.get('/stream', (_req: Request, res: Response) => {
   const clientId = randomUUID();
+  // 客户端断开后的清理已由 sseBroker.addClient 内部的 res.on('close') 统一负责。
+  // 此处不再监听 req 的 close：Express 4 / Node 16+ 下 req 可能提前触发 close，
+  // 反而会把仍然存活的客户端从广播列表里摘掉（chat.ts 曾因此导致 SSE 提前终止）。
   sseBroker.addClient(clientId, res);
 
   // 连接后立即推送一次当前数据
   const stats = computeStats();
   res.write(`event: stats\ndata: ${JSON.stringify(stats)}\n\n`);
-
-  req.on('close', () => {
-    sseBroker.removeClient(clientId);
-  });
 });
 
 /**
