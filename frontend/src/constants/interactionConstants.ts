@@ -2,7 +2,7 @@
  * @file 多模态交互常量
  * @author 第八组（成员A）
  * @date 2026-10-15
- * @description 语音采集 VAD 阈值、录音时长上限与数字人回答模板等常量。
+ * @description 语音采集 VAD 阈值、录音时长上限、数字人回答模板与 Live2D 数字人资源地址等常量。
  */
 
 /** VAD：判定用户「已停止说话」所需的静音时长（毫秒） */
@@ -29,3 +29,30 @@ export const TTS_RECONNECT_BASE_DELAY_MS = 800
 export const GUIDE_REPLY_TEMPLATE = '收到你的问题：「{question}」。我是西湖景区导览数字人小导，很高兴为你服务。'
 /** 模板中问题的占位符 */
 export const GUIDE_REPLY_QUESTION_PLACEHOLDER = '{question}'
+
+/**
+ * Live2D Cubism Core 运行库地址。
+ * 该文件为 Live2D Inc. 的闭源专有软件（Redistributable Code），由官方 CDN 分发，
+ * 按 Live2D 官方许可协议免费用于本项目，**不随仓库分发**，运行时才从 CDN 加载。
+ */
+export const LIVE2D_CUBISM_CORE_SCRIPT_URL =
+  'https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js'
+
+/**
+ * Live2D 示例模型默认地址：官方免费样例「桃濑日和」(Hiyori, Cubism 4)。
+ * 模型素材版权归 Live2D Inc.，条款禁止再分发，因此**不进入仓库**，运行时经 CDN 引用。
+ */
+export const LIVE2D_MODEL_DEFAULT_URL =
+  'https://cdn.jsdelivr.net/gh/Live2D/CubismWebSamples@develop/Samples/Resources/Hiyori/Hiyori.model3.json'
+
+/** Live2D 模型地址，优先读取 Vite 环境变量 VITE_LIVE2D_MODEL_URL，便于换成自有或本地模型 */
+export const LIVE2D_MODEL_URL = import.meta.env.VITE_LIVE2D_MODEL_URL ?? LIVE2D_MODEL_DEFAULT_URL
+
+/** Live2D 口型同步参数 ID，与模型 model3.json 中 LipSync 分组声明的参数保持一致 */
+export const LIVE2D_MOUTH_PARAM_ID = 'ParamMouthOpenY'
+/** Cubism Core 脚本加载超时（毫秒），超时即判定 Live2D 不可用并降级为 Canvas 数字人 */
+export const LIVE2D_CORE_LOAD_TIMEOUT_MS = 8_000
+/** 模型加载超时（毫秒），超时即判定 Live2D 不可用并降级为 Canvas 数字人 */
+export const LIVE2D_MODEL_LOAD_TIMEOUT_MS = 12_000
+/** Live2D 形象在容器内的占高比例，留出上下留白 */
+export const LIVE2D_FIT_RATIO = 0.96
