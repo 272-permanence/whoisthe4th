@@ -78,9 +78,10 @@ function appendTurn(role: ChatRole, text: string): void {
 
 /**
  * 提问：写入对话记录并让数字人播报回答
+ * 接入成员B的 LLM 流式接口：边生成边分句，每凑够一句就触发 TTS 播报
  * @param question 用户提问
  */
-function askQuestion(question: string): void {
+async function askQuestion(question: string): Promise<void> {
   const trimmed = question.trim()
   if (trimmed === '') {
     pipelineError.value = '请输入有效的问题'
@@ -91,9 +92,30 @@ function askQuestion(question: string): void {
   }
   pipelineError.value = ''
   appendTurn('user', trimmed)
-  const reply = buildGuideReply(trimmed)
-  appendTurn('assistant', reply)
-  speak(reply)
+
+  // 先插入一条占位的 assistant 消息，流式更新内容
+  const assistantTurnIndex = turns.value.length
+  appendTurn('assistant', '…')
+
+  try {
+    const fullText = await buildGuideReply(
+      trimmed,
+      // 每凑够一句就播报
+      (sentence) => {
+        speak(sentence)
+      },
+      // 错误处理
+      (err) => {
+        pipelineError.value = err
+      }
+    )
+    // 流式结束后，把完整文本写入对话记录
+    turns.value[assistantTurnIndex].text = fullText
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : '服务暂时不可用'
+    turns.value[assistantTurnIndex].text = `抱歉，${msg}`
+    pipelineError.value = msg
+  }
 }
 
 /**
