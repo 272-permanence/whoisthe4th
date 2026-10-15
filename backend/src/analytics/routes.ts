@@ -10,17 +10,31 @@ import { randomUUID } from 'crypto';
 import { getDb } from './db.js';
 import { analyzeSentiment } from './sentiment.js';
 import { sseBroker } from './sse-broker.js';
+import { logger } from '../utils/logger.js';
 
 const router = Router();
 const PUSH_INTERVAL = 5000; // 每 5 秒推送一次统计数据
 
-// 定时推送统计数据到所有 SSE 客户端
-setInterval(() => {
+// 定时推送统计数据到所有 SSE 客户端，保存引用以便清理
+const pushTimer = setInterval(() => {
   if (sseBroker.getClientCount() > 0) {
-    const stats = computeStats();
-    sseBroker.broadcast('stats', stats);
+    try {
+      const stats = computeStats();
+      sseBroker.broadcast('stats', stats);
+    } catch (error) {
+      logger.error('定时推送统计数据失败', error);
+    }
   }
 }, PUSH_INTERVAL);
+
+/**
+ * 清理资源（应用关闭时调用）
+ */
+export function cleanupAnalytics(): void {
+  clearInterval(pushTimer);
+  sseBroker.shutdown();
+  logger.info('analytics 模块资源已清理');
+}
 
 /**
  * POST /api/v1/analytics/log
@@ -34,22 +48,27 @@ router.post('/log', (req: Request, res: Response) => {
     return;
   }
 
-  // 情感分析
-  const { score, label } = analyzeSentiment(message);
+  try {
+    // 情感分析
+    const { score, label } = analyzeSentiment(message);
 
-  const db = getDb();
-  const stmt = db.prepare(`
-    INSERT INTO interaction_log (user_id, message, response, sentiment_score, sentiment_label, scenic_spot)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
+    const db = getDb();
+    const stmt = db.prepare(`
+      INSERT INTO interaction_log (user_id, message, response, sentiment_score, sentiment_label, scenic_spot)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
 
-  const info = stmt.run(userId, message, response || null, score, label, scenicSpot || null);
+    const info = stmt.run(userId, message, response || null, score, label, scenicSpot || null);
 
-  res.json({
-    code: 0,
-    message: 'ok',
-    data: { id: info.lastInsertRowid, sentimentScore: score, sentimentLabel: label }
-  });
+    res.json({
+      code: 0,
+      message: 'ok',
+      data: { id: info.lastInsertRowid, sentimentScore: score, sentimentLabel: label }
+    });
+  } catch (error) {
+    logger.error('埋点数据写入失败', { userId, message }, error);
+    res.status(500).json({ code: 10002, message: '服务器内部错误' });
+  }
 });
 
 /**
@@ -57,8 +76,13 @@ router.post('/log', (req: Request, res: Response) => {
  * 获取当前统计数据（前端初次加载时调用）
  */
 router.get('/stats', (_req: Request, res: Response) => {
-  const stats = computeStats();
-  res.json({ code: 0, message: 'ok', data: stats });
+  try {
+    const stats = computeStats();
+    res.json({ code: 0, message: 'ok', data: stats });
+  } catch (error) {
+    logger.error('获取统计数据失败', error);
+    res.status(500).json({ code: 10003, message: '服务器内部错误' });
+  }
 });
 
 /**
@@ -68,13 +92,19 @@ router.get('/stats', (_req: Request, res: Response) => {
 router.get('/stream', (req: Request, res: Response) => {
   const clientId = randomUUID();
   sseBroker.addClient(clientId, res);
+  logger.info('SSE 客户端已连接', { clientId, total: sseBroker.getClientCount() });
 
   // 连接后立即推送一次当前数据
-  const stats = computeStats();
-  res.write(`event: stats\ndata: ${JSON.stringify(stats)}\n\n`);
+  try {
+    const stats = computeStats();
+    res.write(`event: stats\ndata: ${JSON.stringify(stats)}\n\n`);
+  } catch (error) {
+    logger.error('SSE 初始数据推送失败', error);
+  }
 
   req.on('close', () => {
     sseBroker.removeClient(clientId);
+    logger.info('SSE 客户端已断开', { clientId, remaining: sseBroker.getClientCount() });
   });
 });
 

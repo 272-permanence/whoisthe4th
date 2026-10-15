@@ -3,6 +3,7 @@ import cors from 'cors';
 import { config } from './config.js';
 import chatRouter from './routes/chat.js';
 import analyticsRouter from './analytics/routes.js';
+import { logger } from './utils/logger.js';
 
 const app = express();
 
@@ -24,6 +25,6 @@ app.get('/health', (req, res) => {
 
 // 启动服务
 app.listen(config.port, () => {
-  console.log(`🚀 后端服务已启动: http://localhost:${config.port}`);
-  console.log(`🔗 允许跨域的前端地址: ${config.frontendUrl}`);
+  logger.info(`后端服务已启动: http://localhost:${config.port}`);
+  logger.info(`允许跨域的前端地址: ${config.frontendUrl}`);
 });

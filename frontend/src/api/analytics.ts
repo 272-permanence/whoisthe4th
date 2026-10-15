@@ -41,22 +41,32 @@ export async function reportInteraction(params: {
   response?: string;
   scenicSpot?: string;
 }): Promise<{ id: number; sentimentScore: number; sentimentLabel: string }> {
-  const res = await fetch(`${BASE_URL}/log`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(params)
-  });
-  const json = await res.json();
-  return json.data;
+  try {
+    const res = await fetch(`${BASE_URL}/log`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
+    });
+    const json = await res.json();
+    return json.data;
+  } catch (error) {
+    console.error('[Analytics] 埋点上报失败', error);
+    throw error;
+  }
 }
 
 /**
  * 获取统计数据（初次加载）
  */
 export async function getStats(): Promise<AnalyticsStats> {
-  const res = await fetch(`${BASE_URL}/stats`);
-  const json = await res.json();
-  return json.data;
+  try {
+    const res = await fetch(`${BASE_URL}/stats`);
+    const json = await res.json();
+    return json.data;
+  } catch (error) {
+    console.error('[Analytics] 获取统计数据失败', error);
+    throw error;
+  }
 }
 
 /**
@@ -68,12 +78,16 @@ export function connectStatsStream(onStats: (stats: AnalyticsStats) => void): ()
   const eventSource = new EventSource(`${BASE_URL}/stream`);
 
   eventSource.addEventListener('stats', (event: MessageEvent) => {
-    const stats = JSON.parse(event.data) as AnalyticsStats;
-    onStats(stats);
+    try {
+      const stats = JSON.parse(event.data) as AnalyticsStats;
+      onStats(stats);
+    } catch (error) {
+      console.error('[Analytics] SSE 数据解析失败', error);
+    }
   });
 
   eventSource.addEventListener('connected', () => {
-    console.log('[Analytics] SSE 连接已建立');
+    console.info('[Analytics] SSE 连接已建立');
   });
 
   eventSource.onerror = () => {
@@ -82,5 +96,6 @@ export function connectStatsStream(onStats: (stats: AnalyticsStats) => void): ()
 
   return () => {
     eventSource.close();
+    console.info('[Analytics] SSE 连接已关闭');
   };
 }

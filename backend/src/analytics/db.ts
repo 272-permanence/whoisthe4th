@@ -8,6 +8,7 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { logger } from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,9 +24,15 @@ let db: Database.Database | null = null;
  */
 export function getDb(): Database.Database {
   if (!db) {
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-    initTables(db);
+    try {
+      db = new Database(DB_PATH);
+      db.pragma('journal_mode = WAL');
+      initTables(db);
+      logger.info('SQLite 数据库初始化成功', { path: DB_PATH });
+    } catch (error) {
+      logger.error('SQLite 数据库初始化失败', { path: DB_PATH }, error);
+      throw error;
+    }
   }
   return db;
 }
