@@ -38,11 +38,13 @@
 | `api/asrTts.ts` | 接口封装：上传音频识别、构造 SSE 订阅地址 |
 | `composables/useAudioCapture.ts` | 麦克风采集 + Web Audio 实时电平 + **VAD 静音自动断句** |
 | `composables/useTtsStream.ts` | 订阅 SSE 流：边收边播（MediaSource）+ **音频振幅驱动口型** + 断线重连续传 |
-| `components/interaction/DigitalHumanAvatar.vue` | Canvas 2D 数字人形象，口型开合由音频振幅实时驱动 |
+| `components/interaction/Live2dAvatar.vue` | **Live2D 数字人形象（默认渲染方式）**：运行时加载官方样例模型，把音频振幅写入模型参数 `ParamMouthOpenY` 实现口型同步；加载失败（含超时）时通知父组件降级 |
+| `components/interaction/DigitalHumanAvatar.vue` | Canvas 2D 数字人形象（**兜底渲染方式**），口型开合由音频振幅实时驱动 |
 | `components/interaction/VoiceInputButton.vue` | 语音输入按钮（含实时电平条与 VAD 状态提示） |
 | `components/interaction/TextInputBar.vue` | 文字提问 + 常用问题快捷选项 |
 | `components/interaction/ConversationList.vue` | 对话记录展示 |
-| `views/InteractionView.vue` | 交互编排页：串起「采集 → 识别 → 回答 → 播报 → 口型」全链路 |
+| `views/InteractionView.vue` | 交互编排页：串起「采集 → 识别 → 回答 → 播报 → 口型」全链路；数字人**优先 Live2D、失败自动降级 Canvas** |
+| `frontend/package.json` | **修改**：新增 `pixi.js@^6`（渲染引擎）与 `pixi-live2d-display@^0.4`（Live2D 加载器，MIT 许可） |
 | `utils/wavEncoder.ts` | 把浏览器录音统一转成 **16kHz 单声道 16bit WAV** |
 | `utils/audioLevel.ts` | RMS 电平计算（VAD 与口型共用） |
 | `utils/guideReply.ts` | **成员B 的接入点**（见第四节） |
@@ -177,12 +179,66 @@ export async function buildGuideReply(question: string): Promise<string> { ... }
 | 前端构建 | `cd frontend; npm run build` | `vue-tsc` 类型检查 + `vite build` 通过 |
 | 前端页面 | 浏览器打开 5173，点击预设问题 | 数字人形象正常渲染，用户/数字人气泡出现，状态显示「正在为你播报…」 |
 | 流式播放 + 口型同步 | 前后两次截图对比 | 嘴型随音频振幅实时变化（口型同步生效） |
+| Live2D 模型加载 | 打开 `/interaction`，等模型从 CDN 加载完成 | 面板显示「渲染方式：Live2D 模型 · 口型同步」，角色为官方 Hiyori 样例模型，控制台无报错 |
+| Live2D 口型同步 | 静止态与播报态各截一张图对比 | 静止时嘴巴闭合为细线、播报时嘴巴张开为明显椭圆（`ParamMouthOpenY` 随振幅变化） |
+| Live2D 降级兜底 | 把 `VITE_LIVE2D_MODEL_URL` 指向不可达地址后重开前端 | 自动降级为 Canvas 数字人，面板显示「渲染方式：Canvas 兜底（Network error.）」，播报链路仍正常 |
 | 麦克风全链路 | 点击 🎙️ 按钮 | 进入「正在聆听…」录音态 → VAD 自动断句 → 上传识别 → 触发播报 |
 | 控制台 | 浏览器 Console | 无报错、无警告 |
 
 ---
 
-## 六、降级矩阵（无网络/无麦克风也能演示）
+## 六、Live2D 数字人（口型同步）接入说明
+
+分工「技术栈（必须使用）」要求口型同步使用 **Wav2Lip 或 Live2D**。本实现采用 **Live2D**，
+并保留自研 Canvas 数字人作为兜底（模型不可用时自动降级，演示不开天窗）。
+
+### 1. 用的什么模型，从哪来，许可能不能用
+
+| 项 | 说明 |
+| --- | --- |
+| 模型 | Live2D 官方免费样例 **「桃濑日和」Hiyori**（Cubism 4 格式，`.model3.json`） |
+| 来源 | 官方示例仓库 [`Live2D/CubismWebSamples`](https://github.com/Live2D/CubismWebSamples) 的 `Samples/Resources/Hiyori/` |
+| 加载方式 | 经 jsDelivr CDN 引用：`https://cdn.jsdelivr.net/gh/Live2D/CubismWebSamples@develop/Samples/Resources/Hiyori/Hiyori.model3.json` |
+| 许可 | Live2D 官方条款**禁止再分发模型素材**，因此**模型文件不进仓库**，只在运行时从 CDN 引用，规避授权风险 |
+
+### 2. 依赖与运行库
+
+| 组件 | 版本 / 地址 | 许可 | 引入方式 |
+| --- | --- | --- | --- |
+| `pixi-live2d-display` | `^0.4` | MIT（开源） | `npm` 依赖，**按需动态 import** |
+| `pixi.js` | `^6`（该加载器仅支持 v6/v7） | MIT（开源） | `npm` 依赖，随上者一起动态 import |
+| Live2D Cubism Core | `live2dcubismcore.min.js` | Live2D 闭源专有（Redistributable Code），本场景免费 | **运行时**注入官方 CDN 脚本 `https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js`，同样不进仓库 |
+
+> 运行库与模型地址统一在 [interactionConstants.ts](file:///C:/Users/%E7%8E%8B%E8%BF%9B/Documents/Trae-CN/temp_20261015_01/whoisthe4th/frontend/src/constants/interactionConstants.ts) 维护，**未硬编码到组件中**；也可用环境变量 `VITE_LIVE2D_MODEL_URL` 覆盖。
+
+### 3. 口型是怎么驱动的
+
+沿用现有音频链路，**没有改动任何音频代码**：
+
+```
+SSE 音频分片 → HTMLAudioElement 播放 → AnalyserNode 采样
+                                            ↓
+                            useTtsStream 导出 mouthOpen（0~1 振幅）
+                                            ↓
+             Live2dAvatar 每帧在 beforeModelUpdate 写入 ParamMouthOpenY
+```
+
+- `ParamMouthOpenY` 是 Hiyori `model3.json` 中 `LipSync` 分组声明的口型参数，组件常量 `LIVE2D_MOUTH_PARAM_ID` 与之一致。
+- 写入时机选 `internalModel` 的 `beforeModelUpdate` 事件：此时动作、物理、呼吸均已写参完毕、尚未变形，口型不会被覆盖。
+- 未说话时强制写 0，保证闭嘴。
+
+### 4. 换成自有模型（可选，无需改代码）
+
+```ini
+# frontend/.env.development（或在 .env.local 中覆盖）
+VITE_LIVE2D_MODEL_URL=https://你的域名/你的模型/xxx.model3.json
+```
+
+模型需为 **Cubism 3/4/5** 格式，且 `model3.json` 中声明了 `LipSync` 分组（`ParamMouthOpenY`）。
+
+---
+
+## 七、降级矩阵（无网络/无麦克风也能演示）
 
 | 场景 | 配置 | 效果 |
 | --- | --- | --- |
@@ -191,10 +247,11 @@ export async function buildGuideReply(question: string): Promise<string> { ... }
 | 想快速跑通链路 | `ASR_PROVIDER=mock` | 返回固定文本，跳过模型下载 |
 | 离线真识别 | `ASR_PROVIDER=whisper-cli` | 本地 Whisper，无需 API Key |
 | 有云端算力 | `ASR_PROVIDER=whisper-api` | 填 `WHISPER_API_KEY` 与 `WHISPER_API_URL`（OpenAI 兼容接口，如硅基流动/阿里云百炼） |
+| 无法加载 Live2D（断网 / CDN 不可达 / 模型地址错误） | 无需配置，`Live2dAvatar` 加载失败或超时即触发 | **自动降级**为 Canvas 2D 数字人，面板标注降级原因；语音链路完全不受影响 |
 
 ---
 
-## 七、常见问题排查
+## 八、常见问题排查
 
 | 现象 | 原因与处理 |
 | --- | --- |
@@ -207,10 +264,13 @@ export async function buildGuideReply(question: string): Promise<string> { ... }
 | 本地识别报 `metadata_errors` | `faster-whisper` 与 `av` 版本不匹配。本仓库的 `whisper_transcribe.py` 已改为**用标准库读取 16kHz WAV 并传 float32 数组**，绕开 PyAV；若仍报错执行 `python -m pip install -U faster-whisper` |
 | 首次识别很慢（十几秒） | Whisper 模型在下载/加载，属于正常现象；`tiny` 最快，`small` 更准 |
 | 说话说完不自动提交 | VAD 阈值偏保守。可在 `frontend/src/constants/interactionConstants.ts` 调整 `VAD_SILENCE_STOP_MS` / `VAD_SPEECH_RMS_THRESHOLD` |
+| 数字人显示「Canvas 兜底（…）」 | Live2D 运行库或模型加载失败/超时。检查能否访问 `cubism.live2d.com` 与 `cdn.jsdelivr.net`；若使用自定义模型，确认 `VITE_LIVE2D_MODEL_URL` 地址可访问且格式为 Cubism 3/4/5 |
+| 数字人一直显示「Live2D 数字人加载中…」 | 模型约 5MB，首屏需下载。等待即可；若长时间不出现，按上一条排查网络 |
+| 装了 `pixi-live2d-display` 后报 Pixi 相关错误 | 该加载器仅支持 **pixi.js v6/v7**。确认 `package.json` 里 `pixi.js` 为 `^6`，不要升到 v8 |
 
 ---
 
-## 八、隐私与安全说明（对应开发规范）
+## 九、隐私与安全说明（对应开发规范）
 
 - 录音仅在浏览器内存中拼接，POST 上传后由后端识别，**不落盘**（后端使用 `memoryStorage`，临时 WAV 识别完立即删除，见 `asrService.ts` 的 `finally` 块）。
 - 上传接口限制单文件体积（`UPLOAD_MAX_BYTES`，默认 20MB）并**校验 MIME 类型白名单**，防止上传恶意文件。

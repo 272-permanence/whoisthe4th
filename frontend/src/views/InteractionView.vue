@@ -6,10 +6,12 @@
  * @description 成员A「多模态语音交互引擎」的端到端编排页面：
  *              语音采集与 VAD 自动断句 → 上传后端语音识别 → 生成回答 → SSE 流式语音合成 →
  *              数字人播报并同步口型。文字提问与语音提问共用同一条链路。
+ *              数字人优先使用 Live2D 模型渲染口型，模型不可用时降级为 Canvas 数字人。
  */
 import { computed, ref } from 'vue'
 import ConversationList from '../components/interaction/ConversationList.vue'
 import DigitalHumanAvatar from '../components/interaction/DigitalHumanAvatar.vue'
+import Live2dAvatar from '../components/interaction/Live2dAvatar.vue'
 import TextInputBar from '../components/interaction/TextInputBar.vue'
 import VoiceInputButton from '../components/interaction/VoiceInputButton.vue'
 import { transcribeAudio } from '../api/asrTts'
@@ -24,6 +26,10 @@ const PRESET_QUESTIONS = ['西湖有哪些必看景点？', '雷峰塔有什么�
 const turns = ref<ChatTurn[]>([])
 const isRecognizing = ref(false)
 const pipelineError = ref('')
+/** 数字人是否使用 Live2D 渲染，加载失败后置为 false 并降级为 Canvas 数字人 */
+const useLive2d = ref(true)
+/** Live2D 降级原因，用于在界面上说明当前渲染方式 */
+const live2dFallbackReason = ref('')
 
 /** 流式语音合成：口型开合度由播放中的音频振幅实时驱动 */
 const {
@@ -61,6 +67,23 @@ const avatarStatus = computed(() => {
   }
   return '等待你的提问'
 })
+
+/** 数字人渲染方式说明 */
+const avatarRenderer = computed(() => {
+  if (useLive2d.value) {
+    return 'Live2D 模型 · 口型同步'
+  }
+  return `Canvas 兜底${live2dFallbackReason.value === '' ? '' : `（${live2dFallbackReason.value}）`}`
+})
+
+/**
+ * Live2D 加载失败时切换到 Canvas 数字人
+ * @param reason 失败原因
+ */
+function handleLive2dUnavailable(reason: string): void {
+  live2dFallbackReason.value = reason
+  useLive2d.value = false
+}
 
 /**
  * 追加一条对话消息
@@ -149,9 +172,16 @@ async function handleSpeechEnd(wav: Blob): Promise<void> {
     </header>
     <section class="interaction">
     <aside class="interaction__avatar">
-      <DigitalHumanAvatar :mouth-open="mouthOpen" :is-speaking="isStreaming" />
+      <Live2dAvatar
+        v-if="useLive2d"
+        :mouth-open="mouthOpen"
+        :is-speaking="isStreaming"
+        @unavailable="handleLive2dUnavailable"
+      />
+      <DigitalHumanAvatar v-else :mouth-open="mouthOpen" :is-speaking="isStreaming" />
       <h2 class="interaction__name">数字人导览员 · 小导</h2>
       <p class="interaction__status">{{ avatarStatus }}</p>
+      <p class="interaction__engine">渲染方式：{{ avatarRenderer }}</p>
       <p class="interaction__engine">语音合成引擎：{{ provider === '' ? '未启动' : provider }}</p>
       <button v-if="isStreaming" class="interaction__stop" type="button" @click="stopSpeaking">
         停止播报

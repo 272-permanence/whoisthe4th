@@ -10,6 +10,8 @@
 interface ImportMetaEnv {
   /** 后端服务基础地址，形如 http://localhost:8000 */
   readonly VITE_API_BASE_URL?: string
+  /** Live2D 模型地址（.model3.json），未配置时使用官方 Hiyori 样例的 CDN 地址 */
+  readonly VITE_LIVE2D_MODEL_URL?: string
 }
 
 interface ImportMeta {
