@@ -1,234 +1,150 @@
 ﻿<mxfile host="app.diagrams.net" modified="2026-10-20" agent="Trae" version="24.0">
   <diagram id="lip-sync-1" name="数字人嘴型同步时序">
-    <mxGraphModel dx="1400" dy="960" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1400" math="0" shadow="0">
+    <mxGraphModel dx="1500" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="1700" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
 
         <!-- ========== 泳道标题 ========== -->
-        <!-- 各泳道 x 起点：用户 20, IV 130, TTS 240, ES 350, EdgeTTS 460, AC 570, L2D 680 -->
-        <mxCell id="LH_U" value="用户" style="text;html=1;align=center;verticalAlign=middle;fontStyle=1;fontSize=13;fontFamily=Arial;fillColor=#ffffff;strokeColor=#333333;rounded=1;whiteSpace=wrap" vertex="1" parent="1">
-          <mxGeometry x="20" y="20" width="110" height="40" as="geometry" />
+        <mxCell id="LH_U" value="用户" style="text;html=1;align=center;verticalAlign=middle;fontStyle=1;fontSize=14;fontFamily=Arial;fillColor=#ffffff;strokeColor=#333333;rounded=1;whiteSpace=wrap" vertex="1" parent="1">
+          <mxGeometry x="20" y="20" width="120" height="48" as="geometry" />
         </mxCell>
-        <mxCell id="LH_IV" value="InteractionView" style="text;html=1;align=center;verticalAlign=middle;fontStyle=1;fontSize=13;fontFamily=Arial;fillColor=#e6f3ff;strokeColor=#4b8fe0;rounded=1;whiteSpace=wrap" vertex="1" parent="1">
-          <mxGeometry x="130" y="20" width="110" height="40" as="geometry" />
+        <mxCell id="LH_IV" value="InteractionView" style="text;html=1;align=center;verticalAlign=middle;fontStyle=1;fontSize=14;fontFamily=Arial;fillColor=#e6f3ff;strokeColor=#4b8fe0;rounded=1;whiteSpace=wrap" vertex="1" parent="1">
+          <mxGeometry x="150" y="20" width="120" height="48" as="geometry" />
         </mxCell>
-        <mxCell id="LH_TTS" value="useTtsStream" style="text;html=1;align=center;verticalAlign=middle;fontStyle=1;fontSize=13;fontFamily=Arial;fillColor=#e6ffe6;strokeColor=#4fa84f;rounded=1;whiteSpace=wrap" vertex="1" parent="1">
-          <mxGeometry x="240" y="20" width="110" height="40" as="geometry" />
+        <mxCell id="LH_TTS" value="useTtsStream" style="text;html=1;align=center;verticalAlign=middle;fontStyle=1;fontSize=14;fontFamily=Arial;fillColor=#e6ffe6;strokeColor=#4fa84f;rounded=1;whiteSpace=wrap" vertex="1" parent="1">
+          <mxGeometry x="280" y="20" width="120" height="48" as="geometry" />
         </mxCell>
-        <mxCell id="LH_ES" value="EventSource" style="text;html=1;align=center;verticalAlign=middle;fontStyle=1;fontSize=13;fontFamily=Arial;fillColor=#fff9e6;strokeColor=#d4a84b;rounded=1;whiteSpace=wrap" vertex="1" parent="1">
-          <mxGeometry x="350" y="20" width="110" height="40" as="geometry" />
+        <mxCell id="LH_ES" value="EventSource" style="text;html=1;align=center;verticalAlign=middle;fontStyle=1;fontSize=14;fontFamily=Arial;fillColor=#fff9e6;strokeColor=#d4a84b;rounded=1;whiteSpace=wrap" vertex="1" parent="1">
+          <mxGeometry x="410" y="20" width="120" height="48" as="geometry" />
         </mxCell>
-        <mxCell id="LH_ET" value="Edge-TTS&lt;br/&gt;(后端 SSE)" style="text;html=1;align=center;verticalAlign=middle;fontStyle=1;fontSize=13;fontFamily=Arial;fillColor=#ffe6f0;strokeColor=#e0598a;rounded=1;whiteSpace=wrap" vertex="1" parent="1">
-          <mxGeometry x="460" y="20" width="110" height="40" as="geometry" />
+        <mxCell id="LH_ET" value="Edge-TTS&#xa;(后端 SSE)" style="text;html=1;align=center;verticalAlign=middle;fontStyle=1;fontSize=14;fontFamily=Arial;fillColor=#ffe6f0;strokeColor=#e0598a;rounded=1;whiteSpace=wrap" vertex="1" parent="1">
+          <mxGeometry x="540" y="20" width="130" height="48" as="geometry" />
         </mxCell>
-        <mxCell id="LH_AC" value="AudioContext&lt;br/&gt;+ AnalyserNode" style="text;html=1;align=center;verticalAlign=middle;fontStyle=1;fontSize=13;fontFamily=Arial;fillColor=#e6f3ff;strokeColor=#4b8fe0;rounded=1;whiteSpace=wrap" vertex="1" parent="1">
-          <mxGeometry x="570" y="20" width="110" height="40" as="geometry" />
+        <mxCell id="LH_AC" value="AudioContext&#xa;+ AnalyserNode" style="text;html=1;align=center;verticalAlign=middle;fontStyle=1;fontSize=14;fontFamily=Arial;fillColor=#e6f3ff;strokeColor=#4b8fe0;rounded=1;whiteSpace=wrap" vertex="1" parent="1">
+          <mxGeometry x="680" y="20" width="140" height="48" as="geometry" />
         </mxCell>
-        <mxCell id="LH_L2D" value="Live2D&lt;br/&gt;internalModel" style="text;html=1;align=center;verticalAlign=middle;fontStyle=1;fontSize=13;fontFamily=Arial;fillColor=#f0e6ff;strokeColor=#8b5ee0;rounded=1;whiteSpace=wrap" vertex="1" parent="1">
-          <mxGeometry x="680" y="20" width="110" height="40" as="geometry" />
+        <mxCell id="LH_L2D" value="Live2D&#xa;internalModel" style="text;html=1;align=center;verticalAlign=middle;fontStyle=1;fontSize=14;fontFamily=Arial;fillColor=#f0e6ff;strokeColor=#8b5ee0;rounded=1;whiteSpace=wrap" vertex="1" parent="1">
+          <mxGeometry x="830" y="20" width="140" height="48" as="geometry" />
         </mxCell>
 
         <!-- ========== 生命虚线 ========== -->
         <mxCell id="LN_U" value="" style="endArrow=none;dashed=1;dashPattern=4 4;strokeColor=#999999;strokeWidth=1" edge="1" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="75" y="60" as="sourcePoint"/>
-            <mxPoint x="75" y="1300" as="targetPoint"/>
-          </mxGeometry>
+          <mxGeometry relative="1" as="geometry"><mxPoint x="80" y="70" as="sourcePoint"/><mxPoint x="80" y="1620" as="targetPoint"/></mxGeometry>
         </mxCell>
         <mxCell id="LN_IV" value="" style="endArrow=none;dashed=1;dashPattern=4 4;strokeColor=#999999;strokeWidth=1" edge="1" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="185" y="60" as="sourcePoint"/>
-            <mxPoint x="185" y="1300" as="targetPoint"/>
-          </mxGeometry>
+          <mxGeometry relative="1" as="geometry"><mxPoint x="210" y="70" as="sourcePoint"/><mxPoint x="210" y="1620" as="targetPoint"/></mxGeometry>
         </mxCell>
         <mxCell id="LN_TTS" value="" style="endArrow=none;dashed=1;dashPattern=4 4;strokeColor=#999999;strokeWidth=1" edge="1" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="295" y="60" as="sourcePoint"/>
-            <mxPoint x="295" y="1300" as="targetPoint"/>
-          </mxGeometry>
+          <mxGeometry relative="1" as="geometry"><mxPoint x="340" y="70" as="sourcePoint"/><mxPoint x="340" y="1620" as="targetPoint"/></mxGeometry>
         </mxCell>
         <mxCell id="LN_ES" value="" style="endArrow=none;dashed=1;dashPattern=4 4;strokeColor=#999999;strokeWidth=1" edge="1" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="405" y="60" as="sourcePoint"/>
-            <mxPoint x="405" y="1300" as="targetPoint"/>
-          </mxGeometry>
+          <mxGeometry relative="1" as="geometry"><mxPoint x="470" y="70" as="sourcePoint"/><mxPoint x="470" y="1620" as="targetPoint"/></mxGeometry>
         </mxCell>
         <mxCell id="LN_ET" value="" style="endArrow=none;dashed=1;dashPattern=4 4;strokeColor=#999999;strokeWidth=1" edge="1" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="515" y="60" as="sourcePoint"/>
-            <mxPoint x="515" y="1300" as="targetPoint"/>
-          </mxGeometry>
+          <mxGeometry relative="1" as="geometry"><mxPoint x="605" y="70" as="sourcePoint"/><mxPoint x="605" y="1620" as="targetPoint"/></mxGeometry>
         </mxCell>
         <mxCell id="LN_AC" value="" style="endArrow=none;dashed=1;dashPattern=4 4;strokeColor=#999999;strokeWidth=1" edge="1" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="625" y="60" as="sourcePoint"/>
-            <mxPoint x="625" y="1300" as="targetPoint"/>
-          </mxGeometry>
+          <mxGeometry relative="1" as="geometry"><mxPoint x="750" y="70" as="sourcePoint"/><mxPoint x="750" y="1620" as="targetPoint"/></mxGeometry>
         </mxCell>
         <mxCell id="LN_L2D" value="" style="endArrow=none;dashed=1;dashPattern=4 4;strokeColor=#999999;strokeWidth=1" edge="1" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="735" y="60" as="sourcePoint"/>
-            <mxPoint x="735" y="1300" as="targetPoint"/>
-          </mxGeometry>
+          <mxGeometry relative="1" as="geometry"><mxPoint x="900" y="70" as="sourcePoint"/><mxPoint x="900" y="1620" as="targetPoint"/></mxGeometry>
         </mxCell>
 
-        <!-- ========== Section 1: 用户点击 ========== -->
-        <mxCell id="M1" value="点击「西湖有哪些必看景点？」" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#333333;endArrow=classic;endFill=1;fontSize=11;fontFamily=Arial" edge="1" parent="1">
+        <!-- ========== 用户点击 ========== -->
+        <mxCell id="M1" value="点击「西湖有哪些必看景点？」" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#333333;endArrow=classic;endFill=1;fontSize=12;fontFamily=Arial;labelPosition=center;verticalAlign=bottom" edge="1" parent="1">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="75" y="90" as="sourcePoint"/>
-            <mxPoint x="185" y="90" as="targetPoint"/>
+            <mxPoint x="80" y="100" as="sourcePoint"/>
+            <mxPoint x="210" y="100" as="targetPoint"/>
+            <Array as="points"/>
           </mxGeometry>
         </mxCell>
-        <mxCell id="M2" value="appendTurn('user')" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=1;strokeColor=#888888;endArrow=open;endFill=0;fontSize=10;fontFamily=Arial" edge="1" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="185" y="120" as="sourcePoint"/>
-            <mxPoint x="185" y="140" as="targetPoint"/>
-          </mxGeometry>
+        <mxCell id="M2" value="appendTurn('user')" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=1;strokeColor=#888888;endArrow=open;endFill=0;fontSize=11;fontFamily=Arial;labelPosition=east" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="210" y="140" as="sourcePoint"/><mxPoint x="210" y="160" as="targetPoint"/></mxGeometry>
         </mxCell>
-        <mxCell id="M3" value="speak(replyText)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#4b8fe0;endArrow=classic;endFill=1;fontSize=11;fontFamily=Arial" edge="1" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="185" y="170" as="sourcePoint"/>
-            <mxPoint x="295" y="170" as="targetPoint"/>
-          </mxGeometry>
+        <mxCell id="M3" value="speak(replyText)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#4b8fe0;endArrow=classic;endFill=1;fontSize=12;fontFamily=Arial;labelPosition=center;verticalAlign=bottom" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="210" y="190" as="sourcePoint"/><mxPoint x="340" y="190" as="targetPoint"/></mxGeometry>
         </mxCell>
 
-        <!-- ========== Section 2: SSE 握手 (rect 淡色背景) ========== -->
-        <mxCell id="R2" value="SSE 握手" style="rounded=1;whiteSpace=wrap;fontSize=11;fontStyle=1;fontFamily=Arial;align=center;verticalAlign=top;fillColor=#fff5dc;strokeColor=#d4a84b;strokeWidth=1;dashed=1;dashPattern=6 4;opacity=40" vertex="1" parent="1">
-          <mxGeometry x="30" y="190" width="760" height="90" as="geometry" />
+        <!-- ========== Section 2: SSE 握手 ========== -->
+        <mxCell id="R2" value="① SSE 握手" style="rounded=1;whiteSpace=wrap;fontSize=13;fontStyle=1;fontFamily=Arial;align=left;verticalAlign=top;spacingLeft=12;spacingTop=8;fillColor=#fff5dc;strokeColor=#d4a84b;strokeWidth=1;dashed=1;dashPattern=6 4;opacity=50" vertex="1" parent="1">
+          <mxGeometry x="30" y="215" width="1030" height="120" as="geometry" />
         </mxCell>
-        <mxCell id="N2" value="Note: SSE 握手" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontFamily=Arial;fillColor=none;strokeColor=none;fontStyle=2;strokeWidth=1" vertex="1" parent="1">
-          <mxGeometry x="405" y="198" width="130" height="20" as="geometry" />
+        <mxCell id="M4" value="new EventSource(/tts/stream?text=...)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#d4a84b;endArrow=classic;endFill=1;fontSize=11;fontFamily=Arial;labelPosition=center;verticalAlign=bottom" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="340" y="260" as="sourcePoint"/><mxPoint x="470" y="260" as="targetPoint"/></mxGeometry>
         </mxCell>
-        <mxCell id="M4" value="new EventSource(/tts/stream?text=...)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#d4a84b;endArrow=classic;endFill=1;fontSize=10;fontFamily=Arial" edge="1" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="295" y="225" as="sourcePoint"/>
-            <mxPoint x="405" y="225" as="targetPoint"/>
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="M5" value="open" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#d4a84b;endArrow=classic;endFill=1;dashed=1;dashPattern=6 4;fontSize=10;fontFamily=Arial" edge="1" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="405" y="255" as="sourcePoint"/>
-            <mxPoint x="295" y="255" as="targetPoint"/>
-          </mxGeometry>
+        <mxCell id="M5" value="open" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#d4a84b;endArrow=classic;endFill=1;dashed=1;dashPattern=6 4;fontSize=11;fontFamily=Arial;labelPosition=center;verticalAlign=top" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="470" y="305" as="sourcePoint"/><mxPoint x="340" y="305" as="targetPoint"/></mxGeometry>
         </mxCell>
 
         <!-- ========== Section 3: meta 事件 ========== -->
-        <mxCell id="R3" value="meta 事件" style="rounded=1;whiteSpace=wrap;fontSize=11;fontStyle=1;fontFamily=Arial;align=center;verticalAlign=top;fillColor=#d0e7ff;strokeColor=#4b8fe0;strokeWidth=1;dashed=1;dashPattern=6 4;opacity=40" vertex="1" parent="1">
-          <mxGeometry x="30" y="300" width="760" height="90" as="geometry" />
+        <mxCell id="R3" value="② meta 事件：provider / voice / sampleRate" style="rounded=1;whiteSpace=wrap;fontSize=13;fontStyle=1;fontFamily=Arial;align=left;verticalAlign=top;spacingLeft=12;spacingTop=8;fillColor=#d0e7ff;strokeColor=#4b8fe0;strokeWidth=1;dashed=1;dashPattern=6 4;opacity=50" vertex="1" parent="1">
+          <mxGeometry x="30" y="355" width="1030" height="120" as="geometry" />
         </mxCell>
-        <mxCell id="N3" value="event: meta → provider, voice, sampleRate" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontFamily=Arial;fillColor=none;strokeColor=none;fontStyle=2;strokeWidth=1" vertex="1" parent="1">
-          <mxGeometry x="355" y="308" width="230" height="20" as="geometry" />
+        <mxCell id="M6" value="event: meta → {...}" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#4b8fe0;endArrow=classic;endFill=1;fontSize=11;fontFamily=Arial;labelPosition=center;verticalAlign=bottom" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="605" y="400" as="sourcePoint"/><mxPoint x="470" y="400" as="targetPoint"/></mxGeometry>
         </mxCell>
-        <mxCell id="M6" value="event: meta → {...}" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#4b8fe0;endArrow=classic;endFill=1;fontSize=10;fontFamily=Arial" edge="1" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="515" y="335" as="sourcePoint"/>
-            <mxPoint x="405" y="335" as="targetPoint"/>
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="M7" value="onmessage('meta') → provider = 'edge-tts'" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#4b8fe0;endArrow=classic;endFill=1;fontSize=10;fontFamily=Arial" edge="1" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="405" y="365" as="sourcePoint"/>
-            <mxPoint x="295" y="365" as="targetPoint"/>
-          </mxGeometry>
+        <mxCell id="M7" value="onmessage('meta') → provider = 'edge-tts'" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#4b8fe0;endArrow=classic;endFill=1;fontSize=11;fontFamily=Arial;labelPosition=center;verticalAlign=bottom" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="470" y="445" as="sourcePoint"/><mxPoint x="340" y="445" as="targetPoint"/></mxGeometry>
         </mxCell>
 
-        <!-- ========== Section 4: 音频分片 + 采样循环 ========== -->
-        <mxCell id="R4" value="音频分片流式推送 + 采样循环" style="rounded=1;whiteSpace=wrap;fontSize=11;fontStyle=1;fontFamily=Arial;align=center;verticalAlign=top;fillColor=#d0ffd0;strokeColor=#4fa84f;strokeWidth=1;dashed=1;dashPattern=6 4;opacity=40" vertex="1" parent="1">
-          <mxGeometry x="30" y="410" width="760" height="730" as="geometry" />
-        </mxCell>
-        <mxCell id="N4" value="播放中 · 每 40ms 采样一次 (LIP_SYNC_INTERVAL_MS)" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontFamily=Arial;fillColor=none;strokeColor=none;fontStyle=2;strokeWidth=1" vertex="1" parent="1">
-          <mxGeometry x="275" y="418" width="270" height="20" as="geometry" />
+        <!-- ========== Section 4: 音频分片 + 采样 ========== -->
+        <mxCell id="R4" value="③ 音频分片流式推送 + 播放中每 40ms 采样一次振幅 (LIP_SYNC_INTERVAL_MS)" style="rounded=1;whiteSpace=wrap;fontSize=13;fontStyle=1;fontFamily=Arial;align=left;verticalAlign=top;spacingLeft=12;spacingTop=8;fillColor=#d0ffd0;strokeColor=#4fa84f;strokeWidth=1;dashed=1;dashPattern=6 4;opacity=50" vertex="1" parent="1">
+          <mxGeometry x="30" y="495" width="1030" height="830" as="geometry" />
         </mxCell>
 
         <!-- 外层 loop: 音频分片 -->
-        <mxCell id="LOOP1" value="loop 每个音频分片" style="rounded=1;whiteSpace=wrap;fontSize=10;fontStyle=1;fontFamily=Arial;align=left;verticalAlign=top;spacingLeft=8;fillColor=none;strokeColor=#4fa84f;strokeWidth=1;dashed=1;dashPattern=4 4" vertex="1" parent="1">
-          <mxGeometry x="40" y="444" width="740" height="200" as="geometry" />
+        <mxCell id="LOOP1" value="loop 每个音频分片" style="rounded=1;whiteSpace=wrap;fontSize=12;fontStyle=1;fontFamily=Arial;align=left;verticalAlign=top;spacingLeft=10;spacingTop=4;fillColor=none;strokeColor=#4fa84f;strokeWidth=1;dashed=1;dashPattern=4 4" vertex="1" parent="1">
+          <mxGeometry x="46" y="534" width="998" height="170" as="geometry" />
         </mxCell>
-        <mxCell id="M8" value="event: audio → {seq, chunk(base64), byteLength}" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#4fa84f;endArrow=classic;endFill=1;fontSize=10;fontFamily=Arial" edge="1" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="515" y="478" as="sourcePoint"/>
-            <mxPoint x="405" y="478" as="targetPoint"/>
-          </mxGeometry>
+        <mxCell id="M8" value="event: audio → {seq, chunk(base64), byteLength}" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#4fa84f;endArrow=classic;endFill=1;fontSize=11;fontFamily=Arial;labelPosition=center;verticalAlign=bottom" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="605" y="574" as="sourcePoint"/><mxPoint x="470" y="574" as="targetPoint"/></mxGeometry>
         </mxCell>
-        <mxCell id="M9" value="onmessage('audio')" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#4fa84f;endArrow=classic;endFill=1;fontSize=10;fontFamily=Arial" edge="1" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="405" y="508" as="sourcePoint"/>
-            <mxPoint x="295" y="508" as="targetPoint"/>
-          </mxGeometry>
+        <mxCell id="M9" value="onmessage('audio')" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#4fa84f;endArrow=classic;endFill=1;fontSize=11;fontFamily=Arial;labelPosition=center;verticalAlign=bottom" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="470" y="619" as="sourcePoint"/><mxPoint x="340" y="619" as="targetPoint"/></mxGeometry>
         </mxCell>
-        <mxCell id="M10" value="MediaSource.appendBuffer(chunk)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#4fa84f;endArrow=classic;endFill=1;fontSize=10;fontFamily=Arial" edge="1" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="295" y="538" as="sourcePoint"/>
-            <mxPoint x="625" y="538" as="targetPoint"/>
-          </mxGeometry>
+        <mxCell id="M10" value="MediaSource.appendBuffer(chunk)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#4fa84f;endArrow=classic;endFill=1;fontSize=11;fontFamily=Arial;labelPosition=center;verticalAlign=bottom" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="340" y="664" as="sourcePoint"/><mxPoint x="750" y="664" as="targetPoint"/></mxGeometry>
         </mxCell>
 
         <!-- 内层 loop: 采样 + 平滑 + 写参数 -->
-        <mxCell id="LOOP2" value="loop 每帧 tick（每 40ms）" style="rounded=1;whiteSpace=wrap;fontSize=10;fontStyle=1;fontFamily=Arial;align=left;verticalAlign=top;spacingLeft=8;fillColor=none;strokeColor=#8b5ee0;strokeWidth=1;dashed=1;dashPattern=4 4" vertex="1" parent="1">
-          <mxGeometry x="40" y="660" width="740" height="460" as="geometry" />
+        <mxCell id="LOOP2" value="loop 每帧 tick（每 40ms）" style="rounded=1;whiteSpace=wrap;fontSize=12;fontStyle=1;fontFamily=Arial;align=left;verticalAlign=top;spacingLeft=10;spacingTop=4;fillColor=none;strokeColor=#8b5ee0;strokeWidth=1;dashed=1;dashPattern=4 4" vertex="1" parent="1">
+          <mxGeometry x="46" y="720" width="998" height="570" as="geometry" />
         </mxCell>
 
-        <mxCell id="M11" value="getByteTimeDomainData(buffer)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#8b5ee0;endArrow=classic;endFill=1;fontSize=10;fontFamily=Arial" edge="1" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="625" y="694" as="sourcePoint"/>
-            <mxPoint x="625" y="734" as="targetPoint"/>
-          </mxGeometry>
+        <mxCell id="M11" value="getByteTimeDomainData(buffer)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#8b5ee0;endArrow=classic;endFill=1;fontSize=11;fontFamily=Arial;labelPosition=center;verticalAlign=bottom" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="750" y="770" as="sourcePoint"/><mxPoint x="750" y="815" as="targetPoint"/></mxGeometry>
         </mxCell>
-        <mxCell id="M12" value="computeRms(buffer)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#8b5ee0;endArrow=classic;endFill=1;fontSize=10;fontFamily=Arial" edge="1" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="625" y="764" as="sourcePoint"/>
-            <mxPoint x="295" y="764" as="targetPoint"/>
-          </mxGeometry>
+        <mxCell id="M12" value="computeRms(buffer)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#8b5ee0;endArrow=classic;endFill=1;fontSize=11;fontFamily=Arial;labelPosition=center;verticalAlign=bottom" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="750" y="860" as="sourcePoint"/><mxPoint x="340" y="860" as="targetPoint"/></mxGeometry>
         </mxCell>
-        <mxCell id="M13" value="target = min(1, rms / 0.12)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=1;strokeColor=#888888;endArrow=open;endFill=0;fontSize=10;fontFamily=Arial" edge="1" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="295" y="794" as="sourcePoint"/>
-            <mxPoint x="295" y="814" as="targetPoint"/>
-          </mxGeometry>
+        <mxCell id="M13" value="target = min(1, rms / 0.12)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=1;strokeColor=#888888;endArrow=open;endFill=0;fontSize=11;fontFamily=Arial;labelPosition=east" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="340" y="905" as="sourcePoint"/><mxPoint x="340" y="940" as="targetPoint"/></mxGeometry>
         </mxCell>
 
-        <mxCell id="N_SMOOTH" value="mouthOpen += (target - mouthOpen) × coeff&#xa;attack=0.5 张嘴快 / release=0.18 闭嘴慢" style="shape=note;whiteSpace=wrap;fontSize=10;fontFamily=Arial;fillColor=#fff9e6;strokeColor=#d4a84b;strokeWidth=1;align=left;spacingLeft=6;spacingRight=6;spacingTop=4;spacingBottom=4" vertex="1" parent="1">
-          <mxGeometry x="100" y="824" width="260" height="54" as="geometry" />
+        <mxCell id="N_SMOOTH" value="mouthOpen += (target - mouthOpen) × coeff&#xa;attack=0.5 张嘴快&#xa;release=0.18 闭嘴慢" style="shape=note;whiteSpace=wrap;fontSize=11;fontFamily=Arial;align=left;spacingLeft=8;spacingRight=8;spacingTop=6;spacingBottom=6;fillColor=#fff9e6;strokeColor=#d4a84b;strokeWidth=1" vertex="1" parent="1">
+          <mxGeometry x="100" y="960" width="300" height="72" as="geometry" />
         </mxCell>
 
-        <mxCell id="M14" value="beforeModelUpdate 钩子&#xa;setParameterValueById('ParamMouthOpenY', mouthOpen)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#8b5ee0;endArrow=classic;endFill=1;fontSize=10;fontFamily=Arial;align=center;verticalAlign=middle" edge="1" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="295" y="900" as="sourcePoint"/>
-            <mxPoint x="735" y="900" as="targetPoint"/>
-          </mxGeometry>
+        <mxCell id="M14" value="beforeModelUpdate 钩子 · setParameterValueById('ParamMouthOpenY', mouthOpen)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#8b5ee0;endArrow=classic;endFill=1;fontSize=11;fontFamily=Arial;labelPosition=center;verticalAlign=bottom;whiteSpace=wrap" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="340" y="1070" as="sourcePoint"/><mxPoint x="900" y="1070" as="targetPoint"/></mxGeometry>
         </mxCell>
-        <mxCell id="M15" value="模型变形：嘴巴张开 / 闭合" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=1;strokeColor=#888888;endArrow=open;endFill=0;fontSize=10;fontFamily=Arial" edge="1" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="735" y="930" as="sourcePoint"/>
-            <mxPoint x="735" y="950" as="targetPoint"/>
-          </mxGeometry>
+        <mxCell id="M15" value="模型变形：嘴巴张开 / 闭合" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=1;strokeColor=#888888;endArrow=open;endFill=0;fontSize=11;fontFamily=Arial;labelPosition=east" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="900" y="1115" as="sourcePoint"/><mxPoint x="900" y="1140" as="targetPoint"/></mxGeometry>
         </mxCell>
 
         <!-- ========== Section 5: 流结束 ========== -->
-        <mxCell id="R5" value="流结束" style="rounded=1;whiteSpace=wrap;fontSize=11;fontStyle=1;fontFamily=Arial;align=center;verticalAlign=top;fillColor=#ffd6e7;strokeColor=#e0598a;strokeWidth=1;dashed=1;dashPattern=6 4;opacity=40" vertex="1" parent="1">
-          <mxGeometry x="30" y="1190" width="760" height="120" as="geometry" />
+        <mxCell id="R5" value="④ 流结束 → cleanup" style="rounded=1;whiteSpace=wrap;fontSize=13;fontStyle=1;fontFamily=Arial;align=left;verticalAlign=top;spacingLeft=12;spacingTop=8;fillColor=#ffd6e7;strokeColor=#e0598a;strokeWidth=1;dashed=1;dashPattern=6 4;opacity=50" vertex="1" parent="1">
+          <mxGeometry x="30" y="1355" width="1030" height="160" as="geometry" />
         </mxCell>
-        <mxCell id="N5" value="event: done" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontFamily=Arial;fillColor=none;strokeColor=none;fontStyle=2;strokeWidth=1" vertex="1" parent="1">
-          <mxGeometry x="425" y="1198" width="90" height="20" as="geometry" />
+        <mxCell id="M16" value="event: done" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#e0598a;endArrow=classic;endFill=1;fontSize=12;fontFamily=Arial;labelPosition=center;verticalAlign=bottom" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="605" y="1400" as="sourcePoint"/><mxPoint x="470" y="1400" as="targetPoint"/></mxGeometry>
         </mxCell>
-        <mxCell id="M16" value="event: done" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#e0598a;endArrow=classic;endFill=1;fontSize=10;fontFamily=Arial" edge="1" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="515" y="1226" as="sourcePoint"/>
-            <mxPoint x="405" y="1226" as="targetPoint"/>
-          </mxGeometry>
+        <mxCell id="M17" value="onmessage('done')" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#e0598a;endArrow=classic;endFill=1;fontSize=12;fontFamily=Arial;labelPosition=center;verticalAlign=bottom" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="470" y="1445" as="sourcePoint"/><mxPoint x="340" y="1445" as="targetPoint"/></mxGeometry>
         </mxCell>
-        <mxCell id="M17" value="onmessage('done')" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#e0598a;endArrow=classic;endFill=1;fontSize=10;fontFamily=Arial" edge="1" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="405" y="1256" as="sourcePoint"/>
-            <mxPoint x="295" y="1256" as="targetPoint"/>
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="M18" value="isStreaming = false" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#e0598a;endArrow=classic;endFill=1;fontSize=10;fontFamily=Arial" edge="1" parent="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="295" y="1286" as="sourcePoint"/>
-            <mxPoint x="185" y="1286" as="targetPoint"/>
-          </mxGeometry>
+        <mxCell id="M18" value="isStreaming = false → 状态切回「等待你的提问」" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeWidth=2;strokeColor=#e0598a;endArrow=classic;endFill=1;fontSize=12;fontFamily=Arial;labelPosition=center;verticalAlign=bottom" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="340" y="1490" as="sourcePoint"/><mxPoint x="210" y="1490" as="targetPoint"/></mxGeometry>
         </mxCell>
       </root>
     </mxGraphModel>
