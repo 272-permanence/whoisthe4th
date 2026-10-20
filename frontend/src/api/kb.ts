@@ -99,6 +99,22 @@ export async function deleteDocument(documentId: string): Promise<void> {
 }
 
 /**
+ * 重建文档索引（后端重新解析文件并写入向量库）
+ * @param documentId 文档标识
+ * @returns 任务标识与文档标识
+ * @throws {Error} 当后端返回非成功状态时抛出
+ */
+export async function reindexDocument(documentId: string): Promise<KbUploadResult> {
+  const payload = (await (
+    await fetch(`${KB_BASE_URL}/documents/${documentId}/reindex`, { method: 'POST' })
+  ).json()) as ApiResult<KbUploadResult>;
+  if (payload.code !== 0) {
+    throw new Error(payload.message);
+  }
+  return payload.data;
+}
+
+/**
  * 知识库语义检索
  * @param query 查询文本
  * @param topK 返回结果条数
