@@ -7,10 +7,15 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { Request, Response } from 'express';
+import { config } from '../config.js';
 import { ErrorCodeEnum } from '../constants/errorCodes.js';
 import { transcribeAudio } from '../services/asrService.js';
 import { createTtsStream, type TtsStream } from '../services/ttsService.js';
-import { initSseStream, sendSseEvent, startSseHeartbeat, SseEventEnum } from '../utils/sse.js';
+import { initSseStream, sendSseEvent, startSseHeartbeat, SseEventEnum } from '../common/sse.js';
+import { createLogger } from '../common/logger.js';
+import { insertAudioLog, insertAsrResult } from '../services/db.js';
+
+const logger = createLogger('asr-controller');
 
 /** 单次合成文本长度上限（字符） */
 const MAX_TTS_TEXT_LENGTH = 500;
@@ -58,15 +63,58 @@ export async function handleTranscribe(req: Request, res: Response): Promise<voi
     res.status(400).json({ code: ErrorCodeEnum.INVALID_AUDIO, message: `不支持的音频类型: ${file.mimetype}` });
     return;
   }
+
+  // 为本次请求生成唯一 id，贯穿 audio_log → asr_result
+  const requestId = randomUUID();
+  const originalName = file.originalname === '' ? 'audio.wav' : file.originalname;
+
+  // 先插录音元数据（此时还没识别，失败也保留上传记录便于排查）
+  let audioLogId: number | undefined;
+  try {
+    audioLogId = insertAudioLog({
+      requestId,
+      filename: originalName,
+      mimetype: file.mimetype,
+      sizeBytes: file.size
+    });
+  } catch (err) {
+    logger.WARN(`audio_log 写入失败（不影响主流程）: ${err instanceof Error ? err.message : err}`);
+  }
+
   try {
     const result = await transcribeAudio({
       buffer: file.buffer,
       mimetype: file.mimetype,
-      filename: file.originalname === '' ? 'audio.wav' : file.originalname
+      filename: originalName
     });
+    // 成功：写 asr_result（status=success）
+    try {
+      insertAsrResult({
+        requestId,
+        audioLogId,
+        provider: result.provider,
+        text: result.text,
+        durationMs: result.durationMs,
+        status: 'success'
+      });
+    } catch (err) {
+      logger.WARN(`asr_result(success) 写入失败: ${err instanceof Error ? err.message : err}`);
+    }
     res.json({ code: 0, message: 'success', data: result });
   } catch (error) {
-    console.error('[asr] 语音识别失败: %s', error);
+    // 失败也写 asr_result（status=failed + errorMessage），便于后续统计故障率
+    try {
+      insertAsrResult({
+        requestId,
+        audioLogId,
+        provider: config.asr.provider,
+        status: 'failed',
+        errorMessage: error instanceof Error ? error.message : '未知错误'
+      });
+    } catch (err) {
+      logger.WARN(`asr_result(failed) 写入失败: ${err instanceof Error ? err.message : err}`);
+    }
+    logger.ERROR(`语音识别失败: ${error instanceof Error ? error.message : error}`);
     res.status(500).json({
       code: ErrorCodeEnum.ASR_FAILED,
       message: error instanceof Error ? error.message : '语音识别失败'

@@ -7,6 +7,7 @@
 
 import { Router, type Request, type Response } from 'express';
 import { randomUUID } from 'crypto';
+import { ErrorCodeEnum } from '../common/errorCodes.js';
 import { getDb } from './db.js';
 import { analyzeSentiment } from './sentiment.js';
 import { sseBroker } from './sse-broker.js';
@@ -30,7 +31,9 @@ router.post('/log', (req: Request, res: Response) => {
   const { userId, message, response, scenicSpot } = req.body || {};
 
   if (!userId || !message) {
-    res.status(400).json({ code: 10001, message: 'userId 和 message 不能为空' });
+    // TODO(D 协作迁移): 把 analytics/routes.ts 里的裸 SSE 头设置（sse-broker.ts:29-32）
+    //   也改成调用 common/sse.ts 的 initSseStream，实现全组 SSE 单一实现
+    res.status(400).json({ code: ErrorCodeEnum.INVALID_PARAM, message: 'userId 和 message 不能为空' });
     return;
   }
 
