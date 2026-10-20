@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { config } from '../config.js';
 import { searchKnowledge, getDocument } from '../services/kbKnowledgeBaseService.js';
 import { saveConversation, saveRagSources, newSessionId } from '../services/conversationStore.js';
+import { initSseStream, sendSseEvent, startSseHeartbeat, SseEventEnum } from '../common/sse.js';
 
 const router = Router();
 
@@ -87,17 +88,12 @@ router.post('/stream', async (req: Request, res: Response) => {
     console.warn('[RAG] 检索失败，降级为纯 LLM 回答:', err instanceof Error ? err.message : err);
   }
 
-  // 设置 SSE 响应头
-  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-  res.setHeader('Cache-Control', 'no-cache, no-transform');
-  res.setHeader('Connection', 'keep-alive');
+  // 设置 SSE 响应头（用队友 common/sse.ts 统一封装）
+  initSseStream(res);
   res.setHeader('Access-Control-Allow-Origin', config.frontendUrl);
-  res.setHeader('X-Accel-Buffering', 'no'); // 禁用 Nginx 缓冲
 
-  // 心跳保活（25 秒一次，防止代理/负载均衡器超时断开）
-  const heartbeat = setInterval(() => {
-    res.write(': heartbeat\n\n');
-  }, 25000);
+  // 心跳保活（队友 common/sse.ts 统一封装，默认 15s）
+  const stopHeartbeat = startSseHeartbeat(res);
 
   try {
     const fullAssistantReply = await streamFromDashScope(chatMessages, res, ragSources);
@@ -126,10 +122,10 @@ router.post('/stream', async (req: Request, res: Response) => {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[SSE ERROR]', msg);
-    res.write(`event: error\ndata: ${JSON.stringify({ message: msg })}\n\n`);
-    res.write(`event: done\ndata: {}\n\n`);
+    sendSseEvent(res, SseEventEnum.ERROR, { message: msg });
+    sendSseEvent(res, SseEventEnum.DONE, {});
   } finally {
-    clearInterval(heartbeat);
+    stopHeartbeat();
     try { res.end(); } catch { /* 已关闭 */ }
   }
 });
@@ -172,12 +168,6 @@ async function streamFromDashScope(
   let seq = 0;
   let fullContent = '';
 
-  const sendEvent = (event: string, data: unknown) => {
-    res.write(`event: ${event}\n`);
-    res.write(`id: ${seq++}\n`);
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-  };
-
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -204,7 +194,7 @@ async function streamFromDashScope(
           const delta = json?.choices?.[0]?.delta?.content ?? '';
           if (delta) {
             fullContent += delta;
-            sendEvent('token', { content: delta });
+            sendSseEvent(res, 'token', { content: delta }, seq++);
           }
         } catch {
           // 忽略无法解析的行
@@ -213,7 +203,7 @@ async function streamFromDashScope(
     }
   }
 
-  sendEvent('done', { fullContent, sources: ragSources.length > 0 ? ragSources : undefined });
+  sendSseEvent(res, SseEventEnum.DONE, { fullContent, sources: ragSources.length > 0 ? ragSources : undefined });
 
   return fullContent;
 }
