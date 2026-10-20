@@ -23,9 +23,6 @@ const inputText = ref('');
 const isLoading = ref(false);
 const errorMsg = ref('');
 
-/** 是否展示引用来源面板（调试用，等 RAG 接入后自动展示） */
-const showSources = ref(false);
-
 // 当前流式控制器，用于取消请求
 let currentController: AbortController | null = null;
 

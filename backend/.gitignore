@@ -28,3 +28,6 @@ logs/
 # Python 侧语音依赖的虚拟环境与字节码缓存（成员A 多模态交互引擎）
 .venv/
 __pycache__/
+
+# 知识库上传文件
+uploads/
