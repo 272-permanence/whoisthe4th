@@ -1,0 +1,83 @@
+%% {init: {theme: 'base', themeVariables: { primaryColor: '#e6f3ff', primaryBorderColor: '#4b8fe0', primaryTextColor: '#133', lineColor: '#7a7a7a'}}}
+flowchart TB
+    subgraph 浏览器 ["用户浏览器 · Vue 3 + Vite"]
+        subgraph 组件层 ["Vue 组件树"]
+            IV[InteractionView<br/>成员A 语音交互]
+            QP[QaPanel<br/>成员B LLM 问答]
+            DB[Dashboard<br/>成员D 运营大屏]
+            AD[Admin<br/>成员C 知识库]
+        end
+        subgraph 音频与数字人 ["Audio + Live2D"]
+            ES["EventSource API<br/>订阅 SSE 流"]
+            AC["AudioContext + AnalyserNode<br/>40ms 采样一次振幅"]
+            L2D["Live2D Avatar<br/>Pixi + Cubism Core<br/>CDN 加载 Hiyori 模型"]
+        end
+        subgraph HTTP 客户端 ["HTTP / SSE 客户端"]
+            Fetch["common/apiClient.apiFetch"]
+            Recorder["MediaRecorder + VAD"]
+        end
+    end
+
+    subgraph 网络层 ["Nginx 反代 + PM2 集群"]
+        Nginx["Nginx<br/>load balance<br/>upstream node_pool"]
+        subgraph NodePool ["PM2 cluster（3 进程）"]
+            P1["node :3001"]
+            P2["node :3002"]
+            P3["node :3003"]
+        end
+    end
+
+    subgraph 后端 ["Node.js + Express（backend）"]
+        App["app.ts<br/>路由分发 / CORS / 错误中间件"]
+        subgraph 公共层 ["common/ 统一基础"]
+            SSE["sse.ts · initSseStream / sendSseEvent / 心跳"]
+            Err["errorCodes.ts · 40001/40002/50000/50001/50002"]
+            Logger["logger.ts · createLogger() · 时间戳 + 模块名"]
+        end
+        subgraph 业务路由 ["routes / analytics"]
+            RT_TTS["asr-tts 路由"]
+            RT_CHAT["chat 路由"]
+            RT_ANA["analytics 路由"]
+            RT_KB["knowledge-base 路由"]
+        end
+    end
+
+    subgraph AI 外部服务 ["AI 依赖"]
+        Whisper["Whisper<br/>语音转文字"]
+        EdgeTTS["Edge-TTS<br/>语音合成"]
+        LLM["Qwen-14B / DashScope<br/>大模型"]
+        Vec["Milvus / Qdrant<br/>向量库"]
+    end
+
+    subgraph 数据库 ["持久化层"]
+        subgraph PG主从 ["PostgreSQL 主从（成员D · 读写分离）"]
+            PG_M["主库（写）"]
+            PG_S["从库（读）"]
+        end
+    end
+
+    %% 连线
+    ES --> Nginx
+    Fetch --> Nginx
+    Nginx --> P1 & P2 & P3
+    P1 & P2 & P3 --> App
+    App --> RT_TTS & RT_CHAT & RT_ANA & RT_KB
+    RT_TTS --> SSE & Err & Logger
+    RT_ANA --> SSE & Err & Logger
+    RT_TTS --> Whisper & EdgeTTS
+    RT_CHAT --> LLM & Vec
+    RT_ANA --> PG_S
+    RT_ANA --> PG_M
+    RT_KB --> PG_M
+
+    %% 样式
+    classDef browser fill:#e6f3ff,stroke:#4b8fe0,color:#133
+    classDef backend fill:#e6ffe6,stroke:#4fa84f,color:#133
+    classDef network fill:#fff9e6,stroke:#d4a84b,color:#333
+    classDef ai fill:#ffe6f0,stroke:#e0598a,color:#333
+    classDef db fill:#f0e6ff,stroke:#8b5ee0,color:#133
+    class 浏览器,组件层,音频与数字人,HTTP 客户端 browser
+    class 后端,公共层,业务路由 backend
+    class 网络层,Nginx,NodePool,P1,P2,P3 network
+    class AI 外部服务,Whisper,EdgeTTS,LLM,Vec ai
+    class PG主从,PG_M,PG_S db

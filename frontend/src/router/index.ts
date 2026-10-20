@@ -13,9 +13,24 @@ const routes = [
     component: () => import('../views/Home.vue')
   },
   {
+    path: '/qa',
+    name: 'qa-panel',
+    component: () => import('../views/QaPanel.vue')
+  },
+  {
+    path: '/interaction',
+    name: 'interaction',
+    component: () => import('../views/InteractionView.vue')
+  },
+  {
     path: '/dashboard',
     name: 'dashboard',
     component: () => import('../views/Dashboard.vue')
+  },
+  {
+    path: '/admin/kb',
+    name: 'admin-kb',
+    component: () => import('../views/admin/KnowledgeBaseAdmin.vue')
   }
 ];
 

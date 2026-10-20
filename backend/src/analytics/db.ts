@@ -7,7 +7,9 @@
 
 import mysql from 'mysql2/promise';
 import { config } from '../config.js';
-import { logger } from '../utils/logger.js';
+import { createLogger } from '../common/logger.js';
+
+const log = createLogger('analytics-db');
 
 /** SQL 参数类型 */
 type SqlParam = string | number | boolean | Date | null;
@@ -35,9 +37,9 @@ export function getMasterPool(): mysql.Pool {
         connectionLimit: 10,
         charset: 'utf8mb4',
       });
-      logger.info('MySQL 主库连接池创建成功', { host: config.db.master.host, port: config.db.master.port });
+      log.INFO(`MySQL 主库连接池创建成功 host=${config.db.master.host} port=${config.db.master.port}`);
     } catch (error) {
-      logger.error('MySQL 主库连接池创建失败', { port: config.db.master.port }, error);
+      log.ERROR(`MySQL 主库连接池创建失败 port=${config.db.master.port}: ${String(error)}`);
       throw error;
     }
   }
@@ -61,9 +63,9 @@ export function getSlavePool(): mysql.Pool {
         connectionLimit: 10,
         charset: 'utf8mb4',
       });
-      logger.info('MySQL 从库连接池创建成功', { host: config.db.slave.host, port: config.db.slave.port });
+      log.INFO(`MySQL 从库连接池创建成功 host=${config.db.slave.host} port=${config.db.slave.port}`);
     } catch (error) {
-      logger.error('MySQL 从库连接池创建失败', { port: config.db.slave.port }, error);
+      log.ERROR(`MySQL 从库连接池创建失败 port=${config.db.slave.port}: ${String(error)}`);
       throw error;
     }
   }
@@ -111,9 +113,9 @@ export async function initTables(): Promise<void> {
         INDEX idx_user_id (user_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
-    logger.info('interaction_log 表初始化成功');
+    log.INFO('interaction_log 表初始化成功');
   } catch (error) {
-    logger.error('interaction_log 表初始化失败', error);
+    log.ERROR(`interaction_log 表初始化失败: ${String(error)}`);
     throw error;
   }
 }
@@ -130,5 +132,5 @@ export async function closeDb(): Promise<void> {
     await slavePool.end();
     slavePool = null;
   }
-  logger.info('MySQL 连接池已关闭');
+  log.INFO('MySQL 连接池已关闭');
 }

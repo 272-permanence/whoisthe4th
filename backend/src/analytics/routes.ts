@@ -10,7 +10,11 @@ import { randomUUID } from 'crypto';
 import { executeRead, executeWrite } from './db.js';
 import { analyzeSentiment } from './sentiment.js';
 import { sseBroker } from './sse-broker.js';
-import { logger } from '../utils/logger.js';
+import { ErrorCodeEnum } from '../common/errorCodes.js';
+import { createLogger } from '../common/logger.js';
+import { sendSseEvent } from '../common/sse.js';
+
+const log = createLogger('analytics');
 
 const router = Router();
 const PUSH_INTERVAL = 5000; // 每 5 秒推送一次统计数据
@@ -22,7 +26,7 @@ const pushTimer = setInterval(async () => {
       const stats = await computeStats();
       sseBroker.broadcast('stats', stats);
     } catch (error) {
-      logger.error('定时推送统计数据失败', error);
+      log.ERROR(`定时推送统计数据失败: ${String(error)}`);
     }
   }
 }, PUSH_INTERVAL);
@@ -33,7 +37,7 @@ const pushTimer = setInterval(async () => {
 export function cleanupAnalytics(): void {
   clearInterval(pushTimer);
   sseBroker.shutdown();
-  logger.info('analytics 模块资源已清理');
+  log.INFO('analytics 模块资源已清理');
 }
 
 /**
@@ -44,7 +48,7 @@ router.post('/log', async (req: Request, res: Response) => {
   const { userId, message, response, scenicSpot } = req.body || {};
 
   if (!userId || !message) {
-    res.status(400).json({ code: 10001, message: 'userId 和 message 不能为空' });
+    res.status(400).json({ code: ErrorCodeEnum.INVALID_PARAM, message: 'userId 和 message 不能为空' });
     return;
   }
 
@@ -65,8 +69,8 @@ router.post('/log', async (req: Request, res: Response) => {
       data: { id: result.insertId, sentimentScore: score, sentimentLabel: label }
     });
   } catch (error) {
-    logger.error('埋点数据写入失败', { userId, message }, error);
-    res.status(500).json({ code: 10002, message: '服务器内部错误' });
+    log.ERROR(`埋点数据写入失败 userId=${userId} message=${message}: ${String(error)}`);
+    res.status(500).json({ code: ErrorCodeEnum.INTERNAL_ERROR, message: '服务器内部错误' });
   }
 });
 
@@ -79,8 +83,8 @@ router.get('/stats', async (_req: Request, res: Response) => {
     const stats = await computeStats();
     res.json({ code: 0, message: 'ok', data: stats });
   } catch (error) {
-    logger.error('获取统计数据失败', error);
-    res.status(500).json({ code: 10003, message: '服务器内部错误' });
+    log.ERROR(`获取统计数据失败: ${String(error)}`);
+    res.status(500).json({ code: ErrorCodeEnum.INTERNAL_ERROR, message: '服务器内部错误' });
   }
 });
 
@@ -88,23 +92,21 @@ router.get('/stats', async (_req: Request, res: Response) => {
  * GET /api/v1/analytics/stream
  * SSE 实时推送统计数据
  */
-router.get('/stream', async (req: Request, res: Response) => {
+router.get('/stream', async (_req: Request, res: Response) => {
   const clientId = randomUUID();
+  // 客户端断开后的清理已由 sseBroker.addClient 内部的 res.on('close') 统一负责。
+  // 此处不再监听 req 的 close：Express 4 / Node 16+ 下 req 可能提前触发 close，
+  // 反而会把仍然存活的客户端从广播列表里摘掉（chat.ts 曾因此导致 SSE 提前终止）。
   sseBroker.addClient(clientId, res);
-  logger.info('SSE 客户端已连接', { clientId, total: sseBroker.getClientCount() });
+  log.INFO(`SSE 客户端已连接 clientId=${clientId} total=${sseBroker.getClientCount()}`);
 
   // 连接后立即推送一次当前数据
   try {
     const stats = await computeStats();
-    res.write(`event: stats\ndata: ${JSON.stringify(stats)}\n\n`);
+    sendSseEvent(res, 'stats', stats);
   } catch (error) {
-    logger.error('SSE 初始数据推送失败', error);
+    log.ERROR(`SSE 初始数据推送失败: ${String(error)}`);
   }
-
-  req.on('close', () => {
-    sseBroker.removeClient(clientId);
-    logger.info('SSE 客户端已断开', { clientId, remaining: sseBroker.getClientCount() });
-  });
 });
 
 /**

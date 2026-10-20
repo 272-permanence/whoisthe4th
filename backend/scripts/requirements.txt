@@ -1,0 +1,12 @@
+# 成员A 语音交互相关 Python 依赖
+# 安装步骤（在 backend 目录下执行）：
+#   python -m venv .venv
+#   .venv\Scripts\python -m pip install -r scripts\requirements.txt
+# 说明：
+#   edge-tts      —— TTS：调用微软 Edge 在线朗读服务流式合成语音（对应 TTS_PROVIDER=edge）
+#   faster-whisper —— ASR：本地离线语音识别，无需 C++ 编译工具链（对应 ASR_PROVIDER=whisper-cli）
+#   numpy          —— 读取 16kHz WAV 采样并以 float32 数组送入模型，绕开 PyAV 版本差异
+# 国内下载模型较慢时，可先设置镜像环境变量：set HF_ENDPOINT=https://hf-mirror.com
+edge-tts>=7.0.0
+faster-whisper>=1.1.0
+numpy>=1.26.0
