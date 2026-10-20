@@ -10,6 +10,7 @@ import { onMounted, reactive, ref } from 'vue';
 import {
   deleteDocument,
   fetchDocuments,
+  reindexDocument,
   searchKnowledge,
   subscribeProgress,
   uploadDocument,
@@ -141,6 +142,42 @@ async function handleDelete(doc: KbDocument): Promise<void> {
   }
 }
 
+/**
+ * 重建文档索引（后端复用上传时的 SSE 进度通道）
+ * @param doc 目标文档
+ */
+async function handleReindex(doc: KbDocument): Promise<void> {
+  if (isProcessing.value) {
+    return;
+  }
+  errorMessage.value = '';
+  isProcessing.value = true;
+  Object.assign(progress, {
+    percent: 0,
+    stage: 'parsing',
+    message: `正在重建索引：${doc.fileName}`,
+    chunkCount: 0,
+    fileName: doc.fileName,
+    documentId: doc.documentId
+  });
+
+  try {
+    const { taskId } = await reindexDocument(doc.documentId);
+    subscribeProgress(
+      taskId,
+      (event) => Object.assign(progress, event),
+      async (event) => {
+        Object.assign(progress, event);
+        isProcessing.value = false;
+        await loadDocuments();
+      }
+    );
+  } catch (error) {
+    isProcessing.value = false;
+    errorMessage.value = error instanceof Error ? error.message : '重建索引失败';
+  }
+}
+
 /** 执行知识库检索自检 */
 async function handleSearch(): Promise<void> {
   const query = searchQuery.value.trim();
@@ -206,7 +243,10 @@ onMounted(loadDocuments);
             <td>{{ doc.chunkCount }}</td>
             <td>{{ STATUS_LABELS[doc.status] ?? doc.status }}</td>
             <td>{{ formatTime(doc.createdAt) }}</td>
-            <td><button class="link-button" @click="handleDelete(doc)">删除</button></td>
+            <td>
+              <button class="action-link" :disabled="isProcessing" @click="handleReindex(doc)">重建索引</button>
+              <button class="link-button" @click="handleDelete(doc)">删除</button>
+            </td>
           </tr>
           <tr v-if="documents.length === 0">
             <td colspan="6" class="empty-cell">暂无文档，请先上传</td>
@@ -359,6 +399,16 @@ button:disabled {
   padding: 0;
   background: transparent;
   color: #e8463a;
+}
+
+.action-link {
+  padding: 0;
+  background: transparent;
+  color: #2563eb;
+}
+
+.doc-table td button + button {
+  margin-left: 12px;
 }
 
 .hit-list {
