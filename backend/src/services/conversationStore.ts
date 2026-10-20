@@ -8,6 +8,9 @@
 
 import { randomUUID } from 'node:crypto';
 import { getDbPool } from '../utils/db.js';
+import { createLogger } from '../common/logger.js';
+
+const log = createLogger('conversation-store');
 
 /** 一条对话记录 */
 export interface ConversationRow {
@@ -66,7 +69,7 @@ export async function saveConversation(
       createdAt: new Date()
     };
     memoryFallback.push(row);
-    console.warn('[conversation-store] MySQL 不可用，降级内存存储。', err instanceof Error ? err.message : err);
+    log.WARN(`MySQL 不可用，降级内存存储: ${err instanceof Error ? err.message : err}`);
     return -1;
   }
 }
@@ -86,7 +89,7 @@ export async function saveRagSources(convId: number, sources: RagSourceRow[]): P
       [values]
     );
   } catch (err) {
-    console.warn('[conversation-store] rag_source 保存失败（可能 MySQL 未配置）：', err instanceof Error ? err.message : err);
+    log.WARN(`rag_source 保存失败（可能 MySQL 未配置）: ${err instanceof Error ? err.message : err}`);
   }
 }
 

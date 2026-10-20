@@ -8,6 +8,9 @@
 
 import mysql, { Pool, PoolOptions } from 'mysql2/promise';
 import { config } from '../config.js';
+import { createLogger } from '../common/logger.js';
+
+const log = createLogger('mysql');
 
 let pool: Pool | null = null;
 
@@ -37,7 +40,7 @@ export function getDbPool(): Pool {
     };
 
     pool = mysql.createPool(options);
-    console.log(`[MySQL] 连接池已创建 ${host}:${port}/${database}`);
+    log.INFO(`连接池已创建 ${host}:${port}/${database}`);
   }
   return pool;
 }
@@ -47,6 +50,6 @@ export async function closeDbPool(): Promise<void> {
   if (pool) {
     await pool.end();
     pool = null;
-    console.log('[MySQL] 连接池已关闭');
+    log.INFO('连接池已关闭');
   }
 }

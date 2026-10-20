@@ -3,8 +3,11 @@ import { config } from '../config.js';
 import { searchKnowledge, getDocument } from '../services/kbKnowledgeBaseService.js';
 import { saveConversation, saveRagSources, newSessionId } from '../services/conversationStore.js';
 import { initSseStream, sendSseEvent, startSseHeartbeat, SseEventEnum } from '../common/sse.js';
+import { createLogger } from '../common/logger.js';
+import { ErrorCodeEnum } from '../common/errorCodes.js';
 
 const router = Router();
+const log = createLogger('chat-stream');
 
 /** RAG 引用来源（前端展示用） */
 interface RagSource {
@@ -56,7 +59,8 @@ router.post('/stream', async (req: Request, res: Response) => {
       { role: 'user', content: message },
     ];
   } else {
-    res.status(400).json({ error: '请提供 message (string) 或 messages (array) 参数' });
+    res.status(400).json({ error: '请提供 message (string) 或 messages (array) 参数', code: ErrorCodeEnum.INVALID_PARAM });
+    log.WARN('参数校验失败，未提供 message 或 messages');
     return;
   }
 
@@ -79,18 +83,18 @@ router.post('/stream', async (req: Request, res: Response) => {
             content: '你是一个专业的景区导览AI助手。\n\n' + ragContext,
           });
         }
-        console.log(`[RAG] 检索到 ${hits.length} 个知识块，来源: ${ragSources.map(s => s.docName).join(', ')}`);
+        log.INFO(`RAG 检索到 ${hits.length} 个知识块，来源: ${ragSources.map(s => s.docName).join(', ')}`);
       } else {
-        console.log('[RAG] 知识库未命中（可能尚未上传文档或向量库为空），直接使用 LLM 回答');
+        log.INFO('RAG 知识库未命中（可能尚未上传文档或向量库为空），直接使用 LLM 回答');
       }
     }
   } catch (err) {
-    console.warn('[RAG] 检索失败，降级为纯 LLM 回答:', err instanceof Error ? err.message : err);
+    log.WARN(`RAG 检索失败，降级为纯 LLM 回答: ${err instanceof Error ? err.message : err}`);
   }
 
   // 设置 SSE 响应头（用队友 common/sse.ts 统一封装）
+  // 注意：cors() 中间件已在 app.ts 处理跨域，此处不再手动 setHeader
   initSseStream(res);
-  res.setHeader('Access-Control-Allow-Origin', config.frontendUrl);
 
   // 心跳保活（队友 common/sse.ts 统一封装，默认 15s）
   const stopHeartbeat = startSseHeartbeat(res);
@@ -118,11 +122,11 @@ router.post('/stream', async (req: Request, res: Response) => {
         score: s.score,
       })));
     }
-    console.log(`[conversation-store] 已持久化 session=${sessionId} ragUsed=${ragUsed}`);
+    log.INFO(`conversation-store 已持久化 session=${sessionId} ragUsed=${ragUsed}`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error('[SSE ERROR]', msg);
-    sendSseEvent(res, SseEventEnum.ERROR, { message: msg });
+    log.ERROR(`SSE ERROR: ${msg}`);
+    sendSseEvent(res, SseEventEnum.ERROR, { message: msg, code: ErrorCodeEnum.INTERNAL_ERROR });
     sendSseEvent(res, SseEventEnum.DONE, {});
   } finally {
     stopHeartbeat();
