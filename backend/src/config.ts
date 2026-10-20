@@ -119,5 +119,14 @@ export const config = {
   /** 向量模型名，需与成员B 的 RAG 链路保持一致 */
   embeddingModel: readText('EMBEDDING_MODEL', DEFAULT_EMBEDDING_MODEL),
   /** 向量维度，需与成员B 的 RAG 链路保持一致 */
-  embeddingDimension: readInt('EMBEDDING_DIMENSION', KB_EMBEDDING_DIMENSION)
+  embeddingDimension: readInt('EMBEDDING_DIMENSION', KB_EMBEDDING_DIMENSION),
+
+  // MySQL 物理数据库（任务3）
+  mysql: {
+    host: readText('DB_HOST', 'localhost-unconfigured'),
+    port: readInt('DB_PORT', 3306),
+    user: readText('DB_USER', 'root'),
+    password: readText('DB_PASSWORD', ''),
+    database: readText('DB_NAME', 'scenic_ai')
+  }
 } as const;
