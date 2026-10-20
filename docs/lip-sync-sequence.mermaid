@@ -1,0 +1,58 @@
+%% 数字人嘴型同步时序图
+%% 用户点击 → SSE 握手 → meta → audio 分片 → EventSource 接收 → AudioContext 播放
+%%   → AnalyserNode 每 40ms 采样一次 RMS → attack/release 平滑 → Live2D ParamMouthOpenY
+sequenceDiagram
+    actor 用户
+    participant IV as InteractionView
+    participant TTS as useTtsStream
+    participant EdgeTTS as Edge-TTS<br/>(后端 SSE)
+    participant ES as EventSource
+    participant AC as AudioContext<br/>+ AnalyserNode
+    participant L2D as Live2D internalModel
+
+    用户->>IV: 点击「西湖有哪些必看景点？」
+    IV->>IV: appendTurn('user')
+    IV->>TTS: speak(replyText)
+
+    rect rgb(255, 245, 230)
+        Note over TTS, EdgeTTS: SSE 握手
+        TTS->>ES: new EventSource(/tts/stream?text=...)
+        ES-->>TTS: open
+    end
+
+    rect rgb(230, 245, 255)
+        Note over EdgeTTS, ES: meta 事件：provider / voice / sampleRate
+        EdgeTTS->>ES: event: meta → {...}
+        ES->>TTS: onmessage('meta') → provider = 'edge-tts'
+    end
+
+    rect rgb(230, 255, 230)
+        Note over EdgeTTS, ES: 音频分片流式推送（循环 N 次）
+        loop 每个音频分片
+            EdgeTTS->>ES: event: audio → {seq, chunk(base64), byteLength}
+            ES->>TTS: onmessage('audio')
+            TTS->>AC: MediaSource.appendBuffer(chunk)
+        end
+
+        Note over AC, L2D: 播放中 · 每 40ms 一次采样 (LIP_SYNC_INTERVAL_MS)
+        loop 每帧 tick
+            AC->>AC: getByteTimeDomainData(buffer)
+            AC->>TTS: computeRms(buffer)
+            TTS->>TTS: target = min(1, rms / 0.12)
+            Note over TTS: mouthOpen += (target - mouthOpen) × coeff<br/>attack=0.5 张嘴快<br/>release=0.18 闭嘴慢
+            TTS->>L2D: beforeModelUpdate 钩子<br/>setParameterValueById('ParamMouthOpenY', mouthOpen)
+            L2D->>L2D: 模型变形：嘴巴张开 / 闭合
+        end
+    end
+
+    rect rgb(255, 230, 230)
+        Note over EdgeTTS, ES: 流结束
+        EdgeTTS->>ES: event: done
+        ES->>TTS: onmessage('done')
+        TTS->>IV: isStreaming = false
+        IV->>IV: 状态切回「等待你的提问」
+    end
+
+    rect rgb(240, 240, 240)
+        Note over L2D: cleanup<br/>MediaSource.endOfStream()<br/>AudioContext 关闭<br/>EventSource.close()
+    end

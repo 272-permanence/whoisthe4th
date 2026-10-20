@@ -3,6 +3,7 @@
  * @author 第八组（成员A）
  * @date 2026-10-15
  * @description 封装 SSE 响应头设置、事件推送与心跳保活，供流式接口复用。
+ *              从 utils/sse.ts 迁移而来，保持逻辑完全一致，仅调整 import 路径。
  */
 import type { Response } from 'express';
 

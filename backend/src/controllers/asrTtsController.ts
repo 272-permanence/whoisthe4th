@@ -10,7 +10,7 @@ import type { Request, Response } from 'express';
 import { ErrorCodeEnum } from '../constants/errorCodes.js';
 import { transcribeAudio } from '../services/asrService.js';
 import { createTtsStream, type TtsStream } from '../services/ttsService.js';
-import { initSseStream, sendSseEvent, startSseHeartbeat, SseEventEnum } from '../utils/sse.js';
+import { initSseStream, sendSseEvent, startSseHeartbeat, SseEventEnum } from '../common/sse.js';
 
 /** 单次合成文本长度上限（字符） */
 const MAX_TTS_TEXT_LENGTH = 500;
