@@ -95,7 +95,11 @@ export async function executeRead<T = mysql.RowDataPacket[]>(sql: string, params
 }
 
 /**
- * 初始化数据表（幂等操作，表已存在则跳过）
+ * 初始化本模块的数据表（幂等操作，表已存在则跳过）
+ * 定义与全组建表脚本 backend/sql/01_schema.sql 中 D 的两张表保持完全一致，
+ * 保证「忘记跑脚本」时后端也能自建表；改结构时两处需同步修改。
+ * - interaction_log  埋点采集写入的用户提问与数字人回答
+ * - sentiment_data   情感分析结果，与 interaction_log 一对一
  */
 export async function initTables(): Promise<void> {
   try {
@@ -105,17 +109,32 @@ export async function initTables(): Promise<void> {
         user_id VARCHAR(64) NOT NULL,
         message TEXT NOT NULL,
         response TEXT,
-        sentiment_score DECIMAL(4,2) DEFAULT 0,
-        sentiment_label VARCHAR(16) DEFAULT 'neutral',
         scenic_spot VARCHAR(128),
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_created_at (created_at),
-        INDEX idx_user_id (user_id)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        INDEX idx_interaction_log_created_at (created_at),
+        INDEX idx_interaction_log_user_id (user_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='交互日志（成员D）'
     `);
-    log.INFO('interaction_log 表初始化成功');
+
+    await executeWrite(`
+      CREATE TABLE IF NOT EXISTS sentiment_data (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        log_id BIGINT NOT NULL,
+        score DECIMAL(4,2) NOT NULL DEFAULT 0,
+        label ENUM('positive', 'neutral', 'negative') NOT NULL DEFAULT 'neutral',
+        model VARCHAR(64) NOT NULL DEFAULT 'lexicon-v1',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_sentiment_data_log_id (log_id),
+        INDEX idx_sentiment_data_label (label),
+        INDEX idx_sentiment_data_created_at (created_at),
+        CONSTRAINT fk_sentiment_data_interaction_log
+          FOREIGN KEY (log_id) REFERENCES interaction_log (id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='情感分析结果（成员D）'
+    `);
+
+    log.INFO('interaction_log / sentiment_data 表初始化成功');
   } catch (error) {
-    log.ERROR(`interaction_log 表初始化失败: ${String(error)}`);
+    log.ERROR(`数据表初始化失败: ${String(error)}`);
     throw error;
   }
 }

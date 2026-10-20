@@ -8,7 +8,7 @@
 import { Router, type Request, type Response } from 'express';
 import { randomUUID } from 'crypto';
 import { executeRead, executeWrite } from './db.js';
-import { analyzeSentiment } from './sentiment.js';
+import { analyzeSentiment, SENTIMENT_MODEL } from './sentiment.js';
 import { sseBroker } from './sse-broker.js';
 import { ErrorCodeEnum } from '../common/errorCodes.js';
 import { createLogger } from '../common/logger.js';
@@ -56,11 +56,16 @@ router.post('/log', async (req: Request, res: Response) => {
     // 情感分析
     const { score, label } = analyzeSentiment(message);
 
-    // 写操作走主库
+    // 写操作走主库：交互日志与情感分析结果分别落到两张表
     const result = await executeWrite<{ insertId: number }>(
-      `INSERT INTO interaction_log (user_id, message, response, sentiment_score, sentiment_label, scenic_spot)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [userId, message, response || null, score, label, scenicSpot || null]
+      `INSERT INTO interaction_log (user_id, message, response, scenic_spot)
+       VALUES (?, ?, ?, ?)`,
+      [userId, message, response || null, scenicSpot || null]
+    );
+
+    await executeWrite(
+      `INSERT INTO sentiment_data (log_id, score, label, model) VALUES (?, ?, ?, ?)`,
+      [result.insertId, score, label, SENTIMENT_MODEL]
     );
 
     res.json({
@@ -125,9 +130,9 @@ async function computeStats() {
   );
   const todayVisits = Number(todayRows[0]?.count ?? 0);
 
-  // 3. 情感分布
+  // 3. 情感分布（情感结果单独存于 sentiment_data，读从库）
   const sentimentRows = await executeRead<{ sentiment_label: string; count: number }[]>(
-    'SELECT sentiment_label, COUNT(*) as count FROM interaction_log GROUP BY sentiment_label'
+    'SELECT label AS sentiment_label, COUNT(*) as count FROM sentiment_data GROUP BY label'
   );
 
   const sentimentDist = { positive: 0, neutral: 0, negative: 0 };
