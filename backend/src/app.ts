@@ -3,6 +3,7 @@ import cors from 'cors';
 import { config } from './config.js';
 import chatRouter from './routes/chat.js';
 import analyticsRouter from './analytics/routes.js';
+import { initTables } from './analytics/db.js';
 import { logger } from './utils/logger.js';
 
 const app = express();
@@ -23,8 +24,18 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: '景区导览 AI 后端 (Node.js) 运行中' });
 });
 
-// 启动服务
-app.listen(config.port, () => {
-  logger.info(`后端服务已启动: http://localhost:${config.port}`);
-  logger.info(`允许跨域的前端地址: ${config.frontendUrl}`);
-});
+// 启动服务（先初始化数据表，再监听端口）
+async function bootstrap(): Promise<void> {
+  try {
+    await initTables();
+    app.listen(config.port, () => {
+      logger.info(`后端服务已启动: http://localhost:${config.port}`);
+      logger.info(`允许跨域的前端地址: ${config.frontendUrl}`);
+    });
+  } catch (error) {
+    logger.error('后端服务启动失败', error);
+    process.exit(1);
+  }
+}
+
+bootstrap();

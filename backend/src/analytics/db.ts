@@ -1,71 +1,134 @@
 /**
- * @file SQLite 数据库初始化与连接管理
+ * @file MySQL 读写分离连接管理
  * @author 第八组
- * @date 2026-10-15
- * @description 初始化交互日志表，提供数据库单例
+ * @date 2026-10-20
+ * @description 主库连接池负责写操作，从库连接池负责读操作，主从复制由 MySQL 层保证
  */
 
-import Database from 'better-sqlite3';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import mysql from 'mysql2/promise';
+import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+/** SQL 参数类型 */
+type SqlParam = string | number | boolean | Date | null;
 
-// 数据库文件存放在 backend/data/analytics.db
-const DB_PATH = path.resolve(__dirname, '../../data/analytics.db');
+/** 主库连接池（写） */
+let masterPool: mysql.Pool | null = null;
 
-let db: Database.Database | null = null;
+/** 从库连接池（读） */
+let slavePool: mysql.Pool | null = null;
 
 /**
- * 获取数据库单例
- * @returns SQLite 数据库实例
+ * 获取主库连接池（写操作走此连接）
+ * @returns 主库连接池
  */
-export function getDb(): Database.Database {
-  if (!db) {
+export function getMasterPool(): mysql.Pool {
+  if (!masterPool) {
     try {
-      db = new Database(DB_PATH);
-      db.pragma('journal_mode = WAL');
-      initTables(db);
-      logger.info('SQLite 数据库初始化成功', { path: DB_PATH });
+      masterPool = mysql.createPool({
+        host: config.db.master.host,
+        port: config.db.master.port,
+        user: config.db.user,
+        password: config.db.password,
+        database: config.db.database,
+        waitForConnections: true,
+        connectionLimit: 10,
+        charset: 'utf8mb4',
+      });
+      logger.info('MySQL 主库连接池创建成功', { host: config.db.master.host, port: config.db.master.port });
     } catch (error) {
-      logger.error('SQLite 数据库初始化失败', { path: DB_PATH }, error);
+      logger.error('MySQL 主库连接池创建失败', { port: config.db.master.port }, error);
       throw error;
     }
   }
-  return db;
+  return masterPool;
+}
+
+/**
+ * 获取从库连接池（读操作走此连接）
+ * @returns 从库连接池
+ */
+export function getSlavePool(): mysql.Pool {
+  if (!slavePool) {
+    try {
+      slavePool = mysql.createPool({
+        host: config.db.slave.host,
+        port: config.db.slave.port,
+        user: config.db.user,
+        password: config.db.password,
+        database: config.db.database,
+        waitForConnections: true,
+        connectionLimit: 10,
+        charset: 'utf8mb4',
+      });
+      logger.info('MySQL 从库连接池创建成功', { host: config.db.slave.host, port: config.db.slave.port });
+    } catch (error) {
+      logger.error('MySQL 从库连接池创建失败', { port: config.db.slave.port }, error);
+      throw error;
+    }
+  }
+  return slavePool;
+}
+
+/**
+ * 执行写语句（走主库）
+ * @param sql SQL 语句（使用 ? 占位符）
+ * @param params 参数数组
+ * @returns 执行结果
+ */
+export async function executeWrite<T = mysql.ResultSetHeader>(sql: string, params: SqlParam[] = []): Promise<T> {
+  const [result] = await getMasterPool().execute(sql, params);
+  return result as T;
+}
+
+/**
+ * 执行读语句（走从库）
+ * @param sql SQL 语句（使用 ? 占位符）
+ * @param params 参数数组
+ * @returns 查询结果集
+ */
+export async function executeRead<T = mysql.RowDataPacket[]>(sql: string, params: SqlParam[] = []): Promise<T> {
+  const [rows] = await getSlavePool().execute(sql, params);
+  return rows as T;
 }
 
 /**
  * 初始化数据表（幂等操作，表已存在则跳过）
  */
-function initTables(database: Database.Database): void {
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS interaction_log (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id TEXT NOT NULL,
-      message TEXT NOT NULL,
-      response TEXT,
-      sentiment_score REAL DEFAULT 0,
-      sentiment_label TEXT DEFAULT 'neutral',
-      scenic_spot TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_interaction_created_at
-      ON interaction_log(created_at);
-    CREATE INDEX IF NOT EXISTS idx_interaction_user_id
-      ON interaction_log(user_id);
-  `);
+export async function initTables(): Promise<void> {
+  try {
+    await executeWrite(`
+      CREATE TABLE IF NOT EXISTS interaction_log (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        user_id VARCHAR(64) NOT NULL,
+        message TEXT NOT NULL,
+        response TEXT,
+        sentiment_score DECIMAL(4,2) DEFAULT 0,
+        sentiment_label VARCHAR(16) DEFAULT 'neutral',
+        scenic_spot VARCHAR(128),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_created_at (created_at),
+        INDEX idx_user_id (user_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    logger.info('interaction_log 表初始化成功');
+  } catch (error) {
+    logger.error('interaction_log 表初始化失败', error);
+    throw error;
+  }
 }
 
 /**
- * 关闭数据库连接
+ * 关闭数据库连接池
  */
-export function closeDb(): void {
-  if (db) {
-    db.close();
-    db = null;
+export async function closeDb(): Promise<void> {
+  if (masterPool) {
+    await masterPool.end();
+    masterPool = null;
   }
+  if (slavePool) {
+    await slavePool.end();
+    slavePool = null;
+  }
+  logger.info('MySQL 连接池已关闭');
 }
