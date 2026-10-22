@@ -9,16 +9,19 @@
 --      InnoDB 引擎，utf8mb4 字符集。
 --   2. 表归属（与 9.22 任务拆解的分工一致）：
 --        成员A 多模态交互：audio_log、asr_result
---        成员B 智能问答　：conversation、rag_source
---        成员C 知识库管理：knowledge_doc、chunk_index
+--        成员B 智能问答　：chat_session、conversation、rag_source
+--        成员C 知识库管理：knowledge_doc、chunk_index、admin_user
 --        成员D 数据洞察　：interaction_log、sentiment_data
---   3. 幂等：全部使用 CREATE TABLE IF NOT EXISTS，可重复执行、不丢数据。
+--        公共新增（需求 3.2.2 / 3.2.3 子系统）：
+--          poi、route、route_poi（景区导览与路线推荐）、digital_human_config（数字人配置）
+--   3. 幂等：全部使用 CREATE TABLE IF NOT EXISTS，可重复执行、不丢数据；
+--      对已存在库的字段增补统一走文末的幂等 ALTER 段。
 --   4. 表间外键已在脚本中串联，关系图见 docs/db-er-diagram.mermaid。
 --   5. 执行方式（任选其一）：
 --        命令行：mysql -h127.0.0.1 -P3307 -uroot scenic_ai < backend/sql/01_schema.sql
 --        MySQL Workbench：打开本文件后直接执行，可 Reverse Engineer 生成 ER 图
 --        后端启动时会由 src/analytics/db.ts 的 initTables() 自动补齐 D 的两张表，
---        但其余 6 张表仍需先执行本脚本
+--        但其余表仍需先执行本脚本
 -- =============================================================================
 
 SET NAMES utf8mb4;
@@ -66,8 +69,25 @@ CREATE TABLE IF NOT EXISTS asr_result (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'ASR 识别结果（成员A）';
 
 -- -----------------------------------------------------------------------------
--- 3. conversation  对话历史（成员B · 智能问答与讲解）
---    列名与 src/services/conversationStore.ts 中的 INSERT / SELECT 完全一致
+-- 3. chat_session  会话记录（成员B · 智能问答与讲解）
+--    对应需求文档 5.4 表 5.6；sessionId 同时是断线续传（NFR-R02）的关联键
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS chat_session (
+  session_id VARCHAR(64) NOT NULL                                   COMMENT '会话唯一标识，主键（需求 5.4 表 5.6）',
+  user_id    VARCHAR(64) DEFAULT NULL                               COMMENT '游客标识（匿名 / 已登录）',
+  status     ENUM('active', 'closed') NOT NULL DEFAULT 'active'     COMMENT '会话状态',
+  title      VARCHAR(128) DEFAULT NULL                              COMMENT '会话标题（扩展字段，历史会话列表展示用，可取首条用户消息摘要）',
+  created_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP         COMMENT '创建时间',
+  PRIMARY KEY (session_id),
+  KEY idx_chat_session_user_id (user_id),
+  KEY idx_chat_session_created_at (created_at)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '会话记录（成员B）';
+
+-- -----------------------------------------------------------------------------
+-- 4. conversation  对话历史（成员B · 智能问答与讲解）
+--    列名与 src/services/conversationStore.ts 中的 INSERT / SELECT 完全一致；
+--    对应需求文档 5.4 表 5.7 chat_message（session_id ↔ session_id、
+--    role ↔ sender_type、content ↔ content）；与 chat_session 按 session_id 弱关联
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS conversation (
   id         BIGINT      NOT NULL AUTO_INCREMENT                    COMMENT '自增主键，供 rag_source.conv_id 关联',
@@ -126,6 +146,7 @@ CREATE TABLE IF NOT EXISTS knowledge_doc (
 -- -----------------------------------------------------------------------------
 -- 6. chunk_index  文档切片索引（成员C · 管理后台与知识库）
 --    只存切片文本与索引关系；向量本体写在向量库（Qdrant / 内存实现）
+--    vector_id 对应需求文档 5.4 表 5.8 knowledge_chunk.vector_id
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS chunk_index (
   id         BIGINT       NOT NULL AUTO_INCREMENT                   COMMENT '自增主键',
@@ -133,6 +154,7 @@ CREATE TABLE IF NOT EXISTS chunk_index (
   doc_id     BIGINT       NOT NULL                                  COMMENT '关联 knowledge_doc.id',
   chunk_no   INT          NOT NULL                                  COMMENT '该文档内的切片序号，从 0 开始',
   content    MEDIUMTEXT   NOT NULL                                  COMMENT '切片文本（KbChunkRecord.text）',
+  vector_id  VARCHAR(64)  NOT NULL DEFAULT ''                       COMMENT '向量库中的向量索引 ID（需求 5.4 表 5.8）',
   char_count INT          NOT NULL DEFAULT 0                        COMMENT '切片字符数',
   created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP        COMMENT '创建时间',
   PRIMARY KEY (id),
@@ -180,7 +202,120 @@ CREATE TABLE IF NOT EXISTS sentiment_data (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '情感分析结果（成员D）';
 
 -- -----------------------------------------------------------------------------
--- 建表结果自检（可选）：应返回 8 行
+-- 9. poi  景点 / 兴趣点（公共新增 · 需求 3.2.2 景区导览与路线推荐子系统）
+--    术语表 1.3 定义 POI：景区中的景点、服务设施、地标等位置对象
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS poi (
+  id          BIGINT       NOT NULL AUTO_INCREMENT                  COMMENT '自增主键',
+  name        VARCHAR(128) NOT NULL                                 COMMENT 'POI 名称，如 "XX 古桥"',
+  category    ENUM('attraction', 'facility', 'landmark', 'food', 'other')
+              NOT NULL DEFAULT 'attraction'                         COMMENT '类型：景点 / 服务设施 / 地标 / 餐饮 / 其他',
+  description TEXT         DEFAULT NULL                             COMMENT '简介与讲解要点',
+  location    VARCHAR(255) DEFAULT NULL                             COMMENT '文字位置描述，如 "景区东门内 200 米"',
+  longitude   DECIMAL(10,6) DEFAULT NULL                            COMMENT '经度（地图展示用，可空）',
+  latitude    DECIMAL(10,6) DEFAULT NULL                            COMMENT '纬度（地图展示用，可空）',
+  status      TINYINT(1)   NOT NULL DEFAULT 1                       COMMENT '是否启用：1 启用 0 停用',
+  created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP       COMMENT '创建时间',
+  updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
+              ON UPDATE CURRENT_TIMESTAMP                           COMMENT '更新时间',
+  PRIMARY KEY (id),
+  KEY idx_poi_category (category),
+  KEY idx_poi_status (status)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '景点 / 兴趣点（需求 3.2.2）';
+
+-- -----------------------------------------------------------------------------
+-- 10. route  游览路线（公共新增 · 需求 3.2.2 景区导览与路线推荐子系统）
+--     按游客兴趣（历史文化 / 自然风光等）生成个性化路线
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS route (
+  id                BIGINT       NOT NULL AUTO_INCREMENT            COMMENT '自增主键',
+  name              VARCHAR(128) NOT NULL                           COMMENT '路线名称，如 "历史文化精华线"',
+  theme             VARCHAR(32)  NOT NULL DEFAULT 'general'         COMMENT '路线主题：history / nature / family / general 等',
+  description       TEXT         DEFAULT NULL                       COMMENT '路线简介',
+  estimated_minutes INT          NOT NULL DEFAULT 0                 COMMENT '预计游览时长（分钟）',
+  status            TINYINT(1)   NOT NULL DEFAULT 1                 COMMENT '是否启用：1 启用 0 停用',
+  created_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updated_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
+              ON UPDATE CURRENT_TIMESTAMP                           COMMENT '更新时间',
+  PRIMARY KEY (id),
+  KEY idx_route_theme (theme),
+  KEY idx_route_status (status)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '游览路线（需求 3.2.2）';
+
+-- -----------------------------------------------------------------------------
+-- 11. route_poi  路线与 POI 关联（公共新增 · 需求 3.2.2）
+--     记录每条路线途经哪些 POI 及先后顺序
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS route_poi (
+  id           BIGINT   NOT NULL AUTO_INCREMENT                     COMMENT '自增主键',
+  route_id     BIGINT   NOT NULL                                    COMMENT '关联 route.id',
+  poi_id       BIGINT   NOT NULL                                    COMMENT '关联 poi.id',
+  seq          INT      NOT NULL                                    COMMENT '在该路线中的顺序号，从 1 开始',
+  stay_minutes INT      NOT NULL DEFAULT 0                          COMMENT '建议停留时长（分钟）',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_route_poi_route_seq (route_id, seq),
+  UNIQUE KEY uk_route_poi_route_poi (route_id, poi_id),
+  KEY idx_route_poi_poi_id (poi_id),
+  CONSTRAINT fk_route_poi_route
+    FOREIGN KEY (route_id) REFERENCES route (id) ON DELETE CASCADE,
+  CONSTRAINT fk_route_poi_poi
+    FOREIGN KEY (poi_id) REFERENCES poi (id) ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '路线-POI 关联（需求 3.2.2）';
+
+-- -----------------------------------------------------------------------------
+-- 12. digital_human_config  数字人配置（公共新增 · 需求 3.2.3 数字人形象与状态管理）
+--     管理员在后台维护数字人形象 / 音色 / 人设等配置（需求 2.2 管理员核心需求）
+--     键值对结构：配置项少且随开发增加，避免频繁改表结构
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS digital_human_config (
+  id           BIGINT       NOT NULL AUTO_INCREMENT                 COMMENT '自增主键',
+  config_key   VARCHAR(64)  NOT NULL                                COMMENT '配置项键，如 avatar_model_url / voice_id / persona_prompt',
+  config_value TEXT         DEFAULT NULL                            COMMENT '配置项值（文本或 JSON）',
+  description  VARCHAR(255) DEFAULT NULL                            COMMENT '配置项说明',
+  created_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP      COMMENT '创建时间',
+  updated_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
+              ON UPDATE CURRENT_TIMESTAMP                           COMMENT '更新时间',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_digital_human_config_key (config_key)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '数字人配置（需求 3.2.3）';
+
+-- -----------------------------------------------------------------------------
+-- 13. admin_user  后台管理员（成员C · 后台管理子系统）
+--     支撑管理员登录（需求 3.2.4）与后台接口鉴权（NFR-S05）
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS admin_user (
+  id            BIGINT       NOT NULL AUTO_INCREMENT                COMMENT '自增主键',
+  username      VARCHAR(64)  NOT NULL                               COMMENT '登录账号',
+  password_hash VARCHAR(255) NOT NULL                               COMMENT '密码哈希（bcrypt，禁止存明文）',
+  display_name  VARCHAR(64)  DEFAULT NULL                           COMMENT '显示名称',
+  role          ENUM('admin', 'operator') NOT NULL DEFAULT 'admin'  COMMENT '角色：管理员 / 运营',
+  status        TINYINT(1)   NOT NULL DEFAULT 1                     COMMENT '账号状态：1 正常 0 禁用',
+  last_login_at DATETIME     DEFAULT NULL                           COMMENT '最后登录时间',
+  created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP     COMMENT '创建时间',
+  updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
+              ON UPDATE CURRENT_TIMESTAMP                           COMMENT '更新时间',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_admin_user_username (username)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '后台管理员（需求 3.2.4 / NFR-S05）';
+
+-- -----------------------------------------------------------------------------
+-- 幂等 ALTER 段：给已存在的老库补字段（新库执行时自动跳过）
+-- -----------------------------------------------------------------------------
+-- chunk_index.vector_id：对应需求 5.4 表 5.8，老库（vector_id 之前建的）补列
+SET @col_exists := (
+  SELECT COUNT(*) FROM information_schema.columns
+  WHERE table_schema = DATABASE() AND table_name = 'chunk_index' AND column_name = 'vector_id'
+);
+SET @alter_sql := IF(@col_exists = 0,
+  'ALTER TABLE chunk_index ADD COLUMN vector_id VARCHAR(64) NOT NULL DEFAULT '''' COMMENT ''向量库中的向量索引 ID（需求 5.4 表 5.8）'' AFTER content',
+  'SELECT ''chunk_index.vector_id 已存在，跳过'' AS msg'
+);
+PREPARE stmt FROM @alter_sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- -----------------------------------------------------------------------------
+-- 建表结果自检（可选）：应返回 14 行
 -- -----------------------------------------------------------------------------
 -- SELECT table_name, table_comment FROM information_schema.tables
 --   WHERE table_schema = 'scenic_ai' ORDER BY table_name;

@@ -2,12 +2,14 @@
 %% 景区导览 AI 数字人 · 全局数据库 ER 图
 %% 维护人：第八组 成员D（数据库统一负责人）
 %% 建表脚本：backend/sql/01_schema.sql
-%% 实体归属：A=多模态交互  B=智能问答  C=知识库管理  D=数据洞察与运营大屏
+%% 实体归属：A=多模态交互  B=智能问答  C=知识库管理  D=数据洞察与运营大屏  P=公共新增（需求 3.2.2 / 3.2.3）
 erDiagram
     audio_log ||--o{ asr_result : "audio_log_id"
     conversation ||--o{ rag_source : "conv_id"
     knowledge_doc ||--o{ chunk_index : "doc_id"
     interaction_log ||--o| sentiment_data : "log_id"
+    route ||--o{ route_poi : "route_id"
+    poi ||--o{ route_poi : "poi_id"
 
     audio_log {
         bigint id PK "自增主键"
@@ -33,9 +35,17 @@ erDiagram
         datetime created_at "创建时间"
     }
 
+    chat_session {
+        varchar session_id PK "会话唯一标识（B，需求 5.4 表 5.6）"
+        varchar user_id "游客标识（匿名 / 已登录）"
+        enum status "active / closed"
+        varchar title "会话标题（历史列表展示用）"
+        datetime created_at "创建时间"
+    }
+
     conversation {
         bigint id PK "自增主键"
-        varchar session_id "会话标识（B）"
+        varchar session_id "会话标识（B，与 chat_session 弱关联）"
         enum role "user / assistant / system"
         mediumtext content "消息内容"
         tinyint rag_used "是否走了 RAG 检索"
@@ -72,6 +82,7 @@ erDiagram
         bigint doc_id FK "关联 knowledge_doc.id"
         int chunk_no "切片序号，从 0 开始"
         mediumtext content "切片文本（向量本体另存向量库）"
+        varchar vector_id "向量库索引 ID（需求 5.4 表 5.8）"
         int char_count "切片字符数"
         datetime created_at "创建时间"
     }
@@ -92,4 +103,57 @@ erDiagram
         enum label "positive / neutral / negative"
         varchar model "产出该结果的分析方案"
         datetime created_at "创建时间"
+    }
+
+    poi {
+        bigint id PK "自增主键"
+        varchar name "POI 名称（P，需求 3.2.2）"
+        enum category "attraction / facility / landmark / food / other"
+        text description "简介与讲解要点"
+        varchar location "文字位置描述"
+        decimal longitude "经度（可空）"
+        decimal latitude "纬度（可空）"
+        tinyint status "1 启用 0 停用"
+        datetime created_at "创建时间"
+        datetime updated_at "更新时间"
+    }
+
+    route {
+        bigint id PK "自增主键"
+        varchar name "路线名称（P，需求 3.2.2）"
+        varchar theme "路线主题 history / nature / family 等"
+        text description "路线简介"
+        int estimated_minutes "预计游览时长（分钟）"
+        tinyint status "1 启用 0 停用"
+        datetime created_at "创建时间"
+        datetime updated_at "更新时间"
+    }
+
+    route_poi {
+        bigint id PK "自增主键"
+        bigint route_id FK "关联 route.id（P）"
+        bigint poi_id FK "关联 poi.id（P）"
+        int seq "路线内顺序号，从 1 开始"
+        int stay_minutes "建议停留时长（分钟）"
+    }
+
+    digital_human_config {
+        bigint id PK "自增主键"
+        varchar config_key "配置项键（P，唯一键，需求 3.2.3）"
+        text config_value "配置项值（文本或 JSON）"
+        varchar description "配置项说明"
+        datetime created_at "创建时间"
+        datetime updated_at "更新时间"
+    }
+
+    admin_user {
+        bigint id PK "自增主键"
+        varchar username "登录账号（C，唯一键，需求 3.2.4）"
+        varchar password_hash "密码哈希（bcrypt）"
+        varchar display_name "显示名称"
+        enum role "admin / operator"
+        tinyint status "1 正常 0 禁用"
+        datetime last_login_at "最后登录时间"
+        datetime created_at "创建时间"
+        datetime updated_at "更新时间"
     }
