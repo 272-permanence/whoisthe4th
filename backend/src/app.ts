@@ -12,12 +12,8 @@ import chatRouter from './routes/chat.js';
 import analyticsRouter from './analytics/routes.js';
 import asrTtsRouter from './routes/asrTts.js';
 import kbRouter from './routes/kb.js';
-import { initTables } from './analytics/db.js';
-import { ErrorCodeEnum } from './common/errorCodes.js';
-import { HttpError } from './common/httpError.js';
-import { createLogger } from './common/logger.js';
-
-const log = createLogger('app');
+import { ErrorCodeEnum } from './constants/errorCodes.js';
+import { HttpError } from './utils/httpError.js';
 
 const app = express();
 
@@ -51,23 +47,13 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     res.status(400).json({ code, message: `音频上传失败: ${error.message}` });
     return;
   }
-  log.ERROR(`[http] 未处理异常: ${String(error)}`);
+  console.error('[http] 未处理异常: %s', error);
   res.status(500).json({ code: ErrorCodeEnum.INTERNAL_ERROR, message: '服务器内部错误' });
 });
 
-// 启动服务（先初始化数据表，再监听端口）
-async function bootstrap(): Promise<void> {
-  try {
-    await initTables();
-    app.listen(config.port, () => {
-      log.INFO(`后端服务已启动: http://localhost:${config.port}`);
-      log.INFO(`允许跨域的前端地址: ${config.frontendUrl}`);
-      log.INFO('语音交互接口: POST /api/v1/asr-tts/asr | GET /api/v1/asr-tts/tts/stream (SSE)');
-    });
-  } catch (error) {
-    log.ERROR(`后端服务启动失败: ${String(error)}`);
-    process.exit(1);
-  }
-}
-
-bootstrap();
+// 启动服务
+app.listen(config.port, () => {
+  console.log(`🚀 后端服务已启动: http://localhost:${config.port}`);
+  console.log(`🔗 允许跨域的前端地址: ${config.frontendUrl}`);
+  console.log(`语音交互接口: POST /api/v1/asr-tts/asr | GET /api/v1/asr-tts/tts/stream (SSE)`);
+});

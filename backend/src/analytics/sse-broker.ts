@@ -2,17 +2,10 @@
  * @file SSE 广播管理器
  * @author 第八组
  * @date 2026-10-15
- * @description 管理多个 SSE 客户端连接，支持广播和心跳保活。
- *              SSE 响应头、事件推送、心跳写法统一由 common/sse.ts 提供，不再手写。
+ * @description 管理多个 SSE 客户端连接，支持广播和心跳保活
  */
 
 import type { Response } from 'express';
-import {
-  initSseStream,
-  sendSseEvent,
-  sendSseComment,
-  SSE_HEARTBEAT_INTERVAL_MS
-} from '../common/sse.js';
 
 interface SseClient {
   id: string;
@@ -22,6 +15,7 @@ interface SseClient {
 class SseBroker {
   private clients: Map<string, SseClient> = new Map();
   private heartbeatTimer: NodeJS.Timeout | null = null;
+  private static HEARTBEAT_INTERVAL = 15000; // 15 秒心跳
 
   constructor() {
     this.startHeartbeat();
@@ -31,11 +25,14 @@ class SseBroker {
    * 添加客户端连接
    */
   addClient(id: string, res: Response): void {
-    // SSE 响应头由公共模块统一设置，保证全组单一实现
-    initSseStream(res);
+    // 设置 SSE 响应头
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // 禁用 nginx 缓冲
 
     // 发送初始连接确认
-    sendSseEvent(res, 'connected', { id });
+    res.write(`event: connected\ndata: ${JSON.stringify({ id })}\n\n`);
 
     this.clients.set(id, { id, res });
 
@@ -56,8 +53,9 @@ class SseBroker {
    * 向所有客户端广播数据
    */
   broadcast(event: string, data: unknown): void {
+    const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
     for (const client of this.clients.values()) {
-      sendSseEvent(client.res, event, data);
+      client.res.write(payload);
     }
   }
 
@@ -66,11 +64,11 @@ class SseBroker {
    */
   private startHeartbeat(): void {
     this.heartbeatTimer = setInterval(() => {
-      const stamp = new Date().toISOString();
+      const heartbeat = `: heartbeat ${new Date().toISOString()}\n\n`;
       for (const client of this.clients.values()) {
-        sendSseComment(client.res, `heartbeat ${stamp}`);
+        client.res.write(heartbeat);
       }
-    }, SSE_HEARTBEAT_INTERVAL_MS);
+    }, SseBroker.HEARTBEAT_INTERVAL);
   }
 
   /**

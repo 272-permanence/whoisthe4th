@@ -22,9 +22,6 @@ const NEGATIVE_WORDS = [
 // 否定词（会反转情感）
 const NEGATION_WORDS = ['不', '没', '无', '非', '未', '别'];
 
-/** 分析方案标识，写入 sentiment_data.model 字段 */
-export const SENTIMENT_MODEL = 'lexicon-v1';
-
 export interface SentimentResult {
   score: number;   // 情感得分，范围 -1 ~ 1
   label: 'positive' | 'neutral' | 'negative';

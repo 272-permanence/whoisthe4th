@@ -1,173 +1,139 @@
 /**
  * @file 数据分析路由模块
  * @author 第八组
- * @date 2026-10-20
- * @description 埋点采集（写主库）、统计聚合（读从库）、SSE 实时推送
+ * @date 2026-10-15
+ * @description 埋点采集、统计聚合、SSE 实时推送
  */
 
 import { Router, type Request, type Response } from 'express';
 import { randomUUID } from 'crypto';
-import { executeRead, executeWrite } from './db.js';
-import { analyzeSentiment, SENTIMENT_MODEL } from './sentiment.js';
-import { sseBroker } from './sse-broker.js';
 import { ErrorCodeEnum } from '../common/errorCodes.js';
-import { createLogger } from '../common/logger.js';
-import { sendSseEvent } from '../common/sse.js';
-
-const log = createLogger('analytics');
+import { getDb } from './db.js';
+import { analyzeSentiment } from './sentiment.js';
+import { sseBroker } from './sse-broker.js';
 
 const router = Router();
 const PUSH_INTERVAL = 5000; // 每 5 秒推送一次统计数据
 
-// 定时推送统计数据到所有 SSE 客户端，保存引用以便清理
-const pushTimer = setInterval(async () => {
+// 定时推送统计数据到所有 SSE 客户端
+setInterval(() => {
   if (sseBroker.getClientCount() > 0) {
-    try {
-      const stats = await computeStats();
-      sseBroker.broadcast('stats', stats);
-    } catch (error) {
-      log.ERROR(`定时推送统计数据失败: ${String(error)}`);
-    }
+    const stats = computeStats();
+    sseBroker.broadcast('stats', stats);
   }
 }, PUSH_INTERVAL);
 
 /**
- * 清理资源（应用关闭时调用）
- */
-export function cleanupAnalytics(): void {
-  clearInterval(pushTimer);
-  sseBroker.shutdown();
-  log.INFO('analytics 模块资源已清理');
-}
-
-/**
  * POST /api/v1/analytics/log
- * 埋点采集：接收前端上报的交互日志，做情感分析后写入主库
+ * 埋点采集：接收前端上报的交互日志，做情感分析后存入数据库
  */
-router.post('/log', async (req: Request, res: Response) => {
+router.post('/log', (req: Request, res: Response) => {
   const { userId, message, response, scenicSpot } = req.body || {};
 
   if (!userId || !message) {
+    // TODO(D 协作迁移): 把 analytics/routes.ts 里的裸 SSE 头设置（sse-broker.ts:29-32）
+    //   也改成调用 common/sse.ts 的 initSseStream，实现全组 SSE 单一实现
     res.status(400).json({ code: ErrorCodeEnum.INVALID_PARAM, message: 'userId 和 message 不能为空' });
     return;
   }
 
-  try {
-    // 情感分析
-    const { score, label } = analyzeSentiment(message);
+  // 情感分析
+  const { score, label } = analyzeSentiment(message);
 
-    // 写操作走主库：交互日志与情感分析结果分别落到两张表
-    const result = await executeWrite<{ insertId: number }>(
-      `INSERT INTO interaction_log (user_id, message, response, scenic_spot)
-       VALUES (?, ?, ?, ?)`,
-      [userId, message, response || null, scenicSpot || null]
-    );
+  const db = getDb();
+  const stmt = db.prepare(`
+    INSERT INTO interaction_log (user_id, message, response, sentiment_score, sentiment_label, scenic_spot)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
 
-    await executeWrite(
-      `INSERT INTO sentiment_data (log_id, score, label, model) VALUES (?, ?, ?, ?)`,
-      [result.insertId, score, label, SENTIMENT_MODEL]
-    );
+  const info = stmt.run(userId, message, response || null, score, label, scenicSpot || null);
 
-    res.json({
-      code: 0,
-      message: 'ok',
-      data: { id: result.insertId, sentimentScore: score, sentimentLabel: label }
-    });
-  } catch (error) {
-    log.ERROR(`埋点数据写入失败 userId=${userId} message=${message}: ${String(error)}`);
-    res.status(500).json({ code: ErrorCodeEnum.INTERNAL_ERROR, message: '服务器内部错误' });
-  }
+  res.json({
+    code: 0,
+    message: 'ok',
+    data: { id: info.lastInsertRowid, sentimentScore: score, sentimentLabel: label }
+  });
 });
 
 /**
  * GET /api/v1/analytics/stats
- * 获取当前统计数据（读操作走从库）
+ * 获取当前统计数据（前端初次加载时调用）
  */
-router.get('/stats', async (_req: Request, res: Response) => {
-  try {
-    const stats = await computeStats();
-    res.json({ code: 0, message: 'ok', data: stats });
-  } catch (error) {
-    log.ERROR(`获取统计数据失败: ${String(error)}`);
-    res.status(500).json({ code: ErrorCodeEnum.INTERNAL_ERROR, message: '服务器内部错误' });
-  }
+router.get('/stats', (_req: Request, res: Response) => {
+  const stats = computeStats();
+  res.json({ code: 0, message: 'ok', data: stats });
 });
 
 /**
  * GET /api/v1/analytics/stream
  * SSE 实时推送统计数据
  */
-router.get('/stream', async (_req: Request, res: Response) => {
+router.get('/stream', (_req: Request, res: Response) => {
   const clientId = randomUUID();
   // 客户端断开后的清理已由 sseBroker.addClient 内部的 res.on('close') 统一负责。
   // 此处不再监听 req 的 close：Express 4 / Node 16+ 下 req 可能提前触发 close，
   // 反而会把仍然存活的客户端从广播列表里摘掉（chat.ts 曾因此导致 SSE 提前终止）。
   sseBroker.addClient(clientId, res);
-  log.INFO(`SSE 客户端已连接 clientId=${clientId} total=${sseBroker.getClientCount()}`);
 
   // 连接后立即推送一次当前数据
-  try {
-    const stats = await computeStats();
-    sendSseEvent(res, 'stats', stats);
-  } catch (error) {
-    log.ERROR(`SSE 初始数据推送失败: ${String(error)}`);
-  }
+  const stats = computeStats();
+  res.write(`event: stats\ndata: ${JSON.stringify(stats)}\n\n`);
 });
 
 /**
- * 计算统计数据（读操作全部走从库）
+ * 计算统计数据
  */
-async function computeStats() {
+function computeStats() {
+  const db = getDb();
+
   // 1. 总服务人次
-  const totalRows = await executeRead<{ count: number }[]>(
-    'SELECT COUNT(*) as count FROM interaction_log'
-  );
-  const totalVisits = Number(totalRows[0]?.count ?? 0);
+  const totalRow = db.prepare('SELECT COUNT(*) as count FROM interaction_log').get() as { count: number };
+  const totalVisits = totalRow.count;
 
   // 2. 今日服务人次
-  const todayRows = await executeRead<{ count: number }[]>(
-    'SELECT COUNT(*) as count FROM interaction_log WHERE DATE(created_at) = CURDATE()'
-  );
-  const todayVisits = Number(todayRows[0]?.count ?? 0);
+  const todayRow = db.prepare(
+    "SELECT COUNT(*) as count FROM interaction_log WHERE date(created_at) = date('now')"
+  ).get() as { count: number };
+  const todayVisits = todayRow.count;
 
-  // 3. 情感分布（情感结果单独存于 sentiment_data，读从库）
-  const sentimentRows = await executeRead<{ sentiment_label: string; count: number }[]>(
-    'SELECT label AS sentiment_label, COUNT(*) as count FROM sentiment_data GROUP BY label'
-  );
+  // 3. 情感分布
+  const sentimentRows = db.prepare(
+    'SELECT sentiment_label, COUNT(*) as count FROM interaction_log GROUP BY sentiment_label'
+  ).all() as { sentiment_label: string; count: number }[];
 
   const sentimentDist = { positive: 0, neutral: 0, negative: 0 };
   for (const row of sentimentRows) {
     if (row.sentiment_label in sentimentDist) {
-      (sentimentDist as Record<string, number>)[row.sentiment_label] = Number(row.count);
+      (sentimentDist as Record<string, number>)[row.sentiment_label] = row.count;
     }
   }
 
   // 4. 热门问答 TOP10
-  const hotQuestions = await executeRead<{ message: string; count: number }[]>(
+  const hotQuestions = db.prepare(
     `SELECT message, COUNT(*) as count
      FROM interaction_log
      GROUP BY message
      ORDER BY count DESC
      LIMIT 10`
-  );
+  ).all() as { message: string; count: number }[];
 
   // 5. 近 24 小时问答量趋势（按小时聚合）
-  const hourlyRows = await executeRead<{ hour: string; count: number }[]>(
-    `SELECT DATE_FORMAT(created_at, '%Y-%m-%d %H:00:00') as hour, COUNT(*) as count
+  const hourlyRows = db.prepare(
+    `SELECT strftime('%Y-%m-%d %H:00:00', created_at) as hour, COUNT(*) as count
      FROM interaction_log
-     WHERE created_at >= DATE_SUB(NOW(), INTERVAL 23 HOUR)
+     WHERE created_at >= datetime('now', '-23 hours')
      GROUP BY hour
      ORDER BY hour`
-  );
+  ).all() as { hour: string; count: number }[];
 
   // 补全 24 小时的数据点
-  const trend = build24HourTrend(hourlyRows.map(r => ({ hour: r.hour, count: Number(r.count) })));
+  const trend = build24HourTrend(hourlyRows);
 
   return {
     totalVisits,
     todayVisits,
     sentimentDist,
-    hotQuestions: hotQuestions.map(r => ({ message: r.message, count: Number(r.count) })),
+    hotQuestions,
     hourlyTrend: trend,
     updatedAt: new Date().toISOString()
   };
