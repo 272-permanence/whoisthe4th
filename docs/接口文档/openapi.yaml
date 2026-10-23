@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: 景区导览 AI 数字人 · 后端接口文档
-  version: 1.0.0
+  version: 1.1.0
   license:
     name: 第八组课程项目（内部使用）
   description: |
@@ -9,11 +9,11 @@ info:
 
     ## 基础信息
     - 基础地址：`http://localhost:8000`（本地开发），所有业务接口前缀为 `/api/v1`
-    - 鉴权：当前版本**无鉴权**，接口默认允许前端地址跨域（CORS 白名单为 `FRONTEND_URL`，默认 `http://localhost:5173`）
+    - 鉴权：`securitySchemes` 已定义 `bearerAuth`（Bearer JWT），admin 与管理类接口要求携带 `Authorization: Bearer <token>`
     - 字符编码：UTF-8
 
     ## 通用响应包络
-    除 `/api/v1/chat/stream` 外，业务接口统一返回：
+    除 SSE 流式接口外，业务接口统一返回：
 
     ```json
     { "code": 0, "message": "ok", "data": {} }
@@ -28,6 +28,9 @@ info:
     | 40001 | 参数校验失败 |
     | 40002 | 上传文件缺失或类型不合法 |
     | 40003 | 上传文件超出体积上限 |
+    | 40101 | 未提供鉴权 Token |
+    | 40102 | Token 无效或已过期 |
+    | 40301 | 权限不足（非管理员） |
     | 50000 | 未预期的服务端异常 |
     | 50001 | 语音识别服务不可用 |
     | 50002 | 语音合成服务不可用 |
@@ -43,10 +46,51 @@ info:
 
     各流式接口的事件名与负载见对应接口说明。心跳保活为注释行（以 `:` 开头），客户端应忽略。
     - 语音合成支持断线续传：通过 `lastSeq` 查询参数跳过已收到的音频分片
+
+    ## 鉴权规划（v1.1 新增）
+
+    > **规划态（N → Y 标注）**：下表用于追踪各接口的鉴权规划进度，`Y` 表示已上线、`N` 表示规划中未落地。
+
+    | 模块 | 接口 | 鉴权规划 | 上线状态 |
+    | --- | --- | --- | --- |
+    | admin | POST /api/v1/admin/auth/login | 无（登录入口） | Y |
+    | admin | POST /api/v1/admin/auth/logout | Bearer JWT（管理员） | N |
+    | admin | GET /api/v1/admin/config | Bearer JWT（管理员） | N |
+    | admin | PUT /api/v1/admin/config | Bearer JWT（管理员） | N |
+    | admin | GET /api/v1/admin/logs | Bearer JWT（管理员） | N |
+    | chat | POST /api/v1/chat/stop | Bearer JWT（会话归属用户 / SSE 客户端临时凭证） | N |
+    | scenic | GET /api/v1/scenic/pois | 公开（可选匿名） | N |
+    | scenic | GET /api/v1/scenic/routes/recommend | 公开（可选匿名） | N |
+    | digital-human | POST /api/v1/digital-human/state/switch | 可选（携带则记忆偏好） | N |
+    | digital-human | POST /api/v1/digital-human/expressions | 公开 | N |
+    | kb | POST /api/v1/kb/documents | Bearer JWT（管理员） | N |
+    | kb | GET /api/v1/kb/documents | Bearer JWT（管理员） | N |
+    | kb | POST /api/v1/kb/documents/{documentId}/reindex | Bearer JWT（管理员） | N |
+    | kb | DELETE /api/v1/kb/documents/{documentId} | Bearer JWT（管理员） | N |
+
+    - **Token 格式**：`Authorization: Bearer eyJhbGci...`，JWT claims 包含 `sub`（用户标识）、`role`（`admin` / `user`）、`exp`、`iat`
+    - **登录入口**：`POST /api/v1/admin/auth/login` 返回 `{ accessToken, expiresIn }`
+    - **无状态刷新**：v1.1 不支持 refresh token；超时后需重新登录
+
+    ## 上线自查审计清单
+
+    每次上线 admin / chat / scenic / digital-human 模块时需逐项核对：
+
+    1. **鉴权中间件已挂载**：admin 路由统一走 `requireAdminRole` 守卫，kb 管理类接口走 `requireJwt` + 角色校验
+    2. **CORS 白名单收紧**：admin 路由仅允许内网 / 运营后台域名，禁止 `*`
+    3. **速率限制**：admin/auth/login 防暴力破解（IP + 用户 5 次 / 分钟）；chat/stop 按会话限流
+    4. **审计日志接入**：admin 模块所有写操作（login/logout/config PUT）必须写入 `logs` 表
+    5. **错误信息不泄露**：生产环境不得向客户端返回 `stack` / 内部 host / DB 连接串
+    6. **依赖版本**：`@redocly/cli`、Node、关键运行时镜像已过 CVE 扫描
+    7. **文档同步**：本次发布后重新 `redocly build-docs` 与 docx 生成，commit message 带版本号
+
 servers:
   - url: http://localhost:8000
     description: 本地开发环境
-security: []
+
+security:
+  - bearerAuth: []
+
 tags:
   - name: 健康检查
     description: 服务存活探测
@@ -58,6 +102,12 @@ tags:
     description: 语音识别（ASR）与语音合成（TTS）
   - name: 知识库管理
     description: 景区资料上传、异步入库、向量检索与文档管理
+  - name: 景区导览
+    description: 景区基础信息、景点目录与个性化路线推荐
+  - name: 数字人管理
+    description: 数字人形象、音色切换与会话绑定
+  - name: 管理后台
+    description: 管理员登录、用户管理、系统配置与审计日志
 
 paths:
   /health:
@@ -66,6 +116,8 @@ paths:
       summary: 健康检查
       description: 探测后端服务是否存活，用于部署与联调自检。
       operationId: getHealth
+      security: []
+      x-plan-status: Y
       responses:
         '200':
           description: 服务正常运行
@@ -101,6 +153,8 @@ paths:
 
         心跳为注释行（以 `:` 开头，`: heartbeat`，每 25 秒一次），客户端应忽略。
       operationId: chatStream
+      security: []
+      x-plan-status: Y
       requestBody:
         required: true
         content:
@@ -136,12 +190,60 @@ paths:
                     type: string
                     example: 请提供 message (string) 或 messages (array) 参数
 
+  /api/v1/chat/stop:
+    post:
+      tags: [智能问答]
+      summary: 停止流式对话
+      description: |
+        主动终止指定会话的 SSE 流式对话，服务端立即关闭 SSE 通道、释放 token 生成并发配额。
+
+        典型场景：用户点击"停止"按钮；数字人切换会话；页面卸载时主动清理。
+      operationId: stopChatStream
+      x-plan-status: N
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId]
+              properties:
+                sessionId:
+                  type: string
+                  format: uuid
+                  description: 会话标识，由 chat/stream 响应头 `X-Session-Id` 返回
+                reason:
+                  type: string
+                  enum: [user_cancel, session_switch, page_unload, admin_terminate]
+                  description: 停止原因，用于统计审计
+      responses:
+        '200':
+          description: 停止指令已送达
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResult'
+        '404':
+          description: sessionId 不存在或已结束
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - type: object
+                    properties:
+                      code:
+                        type: integer
+                        example: 404
+
   /api/v1/analytics/log:
     post:
       tags: [数据分析]
       summary: 上报交互埋点
       description: 前端上报一次问答交互，服务端做情感分析并落库，返回记录 ID 与情感判定。
       operationId: createAnalyticsLog
+      security: []
+      x-plan-status: Y
       requestBody:
         required: true
         content:
@@ -180,6 +282,8 @@ paths:
       summary: 获取统计数据
       description: 前端看板初次加载时拉取一次全量统计快照。
       operationId: getAnalyticsStats
+      security: []
+      x-plan-status: Y
       responses:
         '200':
           description: 统计快照
@@ -209,6 +313,8 @@ paths:
         心跳为注释行（以 `:` 开头，内容形如 `: heartbeat <ISO 时间>`，每 15 秒一次），客户端应忽略。
         客户端断开后由服务端自动清理，无需额外调用。
       operationId: streamAnalyticsStats
+      security: []
+      x-plan-status: Y
       responses:
         '200':
           description: SSE 流（`text/event-stream`）
@@ -238,6 +344,8 @@ paths:
         允许的 MIME 类型白名单：`audio/wav`、`audio/x-wav`、`audio/wave`、`audio/mpeg`、`audio/mp3`、`audio/webm`、`audio/ogg`、`audio/mp4`、`audio/x-m4a`。
         文件在内存中处理，不落盘。
       operationId: transcribeAudio
+      security: []
+      x-plan-status: Y
       requestBody:
         required: true
         content:
@@ -309,6 +417,8 @@ paths:
         | `done` | `{ "streamId", "totalChunks", "provider" }` | 合成正常结束 |
         | `error` | `{ "code": 50002, "message": "..." }` | 合成异常结束 |
       operationId: streamTts
+      security: []
+      x-plan-status: Y
       parameters:
         - name: text
           in: query
@@ -368,6 +478,7 @@ paths:
         允许的扩展名：`.pdf`、`.docx`、`.txt`、`.md`；文件体积上限 **50 MB**。
         分块参数：块大小 800 字符、重叠 120 字符。
       operationId: uploadKbDocument
+      x-plan-status: N
       requestBody:
         required: true
         content:
@@ -401,6 +512,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/KbErrorResponse'
+        '401':
+          description: 未携带管理员 Token
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - type: object
+                    properties:
+                      code:
+                        type: integer
+                        example: 40101
         '413':
           description: 文件超过 50 MB 上限
           content:
@@ -422,6 +545,7 @@ paths:
       summary: 查询知识库文档列表
       description: 返回当前已入库（含处理中、失败）的全部文档元数据。
       operationId: listKbDocuments
+      x-plan-status: N
       responses:
         '200':
           description: 文档列表
@@ -440,6 +564,18 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/KbDocument'
+        '401':
+          description: 未携带管理员 Token
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - type: object
+                    properties:
+                      code:
+                        type: integer
+                        example: 40101
 
   /api/v1/kb/tasks/{taskId}:
     get:
@@ -447,6 +583,8 @@ paths:
       summary: 查询入库任务快照
       description: 主动查询某个入库任务的当前状态（SSE 之外的轮询兜底方式）。
       operationId: getKbTask
+      security: []
+      x-plan-status: Y
       parameters:
         - $ref: '#/components/parameters/TaskId'
       responses:
@@ -484,6 +622,8 @@ paths:
 
         阶段与百分比对应关系：`uploading` 2% → `parsing` 30% → `chunking` 50% → `embedding` 80% → `indexing` 95% → `done` 100%。
       operationId: streamKbTaskProgress
+      security: []
+      x-plan-status: Y
       parameters:
         - $ref: '#/components/parameters/TaskId'
       responses:
@@ -513,6 +653,7 @@ paths:
       summary: 删除文档及其向量
       description: 从知识库移除文档，同时清理该文档在向量库中的全部知识块。
       operationId: deleteKbDocument
+      x-plan-status: N
       parameters:
         - $ref: '#/components/parameters/DocumentId'
       responses:
@@ -522,6 +663,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResult'
+        '401':
+          description: 未携带管理员 Token
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - type: object
+                    properties:
+                      code:
+                        type: integer
+                        example: 40101
         '404':
           description: 文档不存在
           content:
@@ -538,6 +691,7 @@ paths:
 
         典型用途：文档处理失败后重试，或更换向量模型 / 向量库后重建索引。
       operationId: reindexKbDocument
+      x-plan-status: N
       parameters:
         - $ref: '#/components/parameters/DocumentId'
       responses:
@@ -555,6 +709,18 @@ paths:
                         example: 已开始重建索引
                       data:
                         $ref: '#/components/schemas/KbUploadResult'
+        '401':
+          description: 未携带管理员 Token
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - type: object
+                    properties:
+                      code:
+                        type: integer
+                        example: 40101
         '404':
           description: 文档不存在
           content:
@@ -571,6 +737,8 @@ paths:
 
         **当前检索质量提示**：若未配置 `EMBEDDING_API_URL`，服务端使用「本地确定性伪向量」兜底实现，此时 `score` 不具备语义意义；同时默认分块策略对小文件会产出极少的知识块（整篇可能只有 1 块），导致不同 query 命中同一段文本。需接入真实向量模型后检索质量才可评估。
       operationId: searchKb
+      security: []
+      x-plan-status: Y
       requestBody:
         required: true
         content:
@@ -613,7 +781,427 @@ paths:
               schema:
                 $ref: '#/components/schemas/KbErrorResponse'
 
+  /api/v1/scenic/pois:
+    get:
+      tags: [景区导览]
+      summary: 景点 POI 列表
+      description: |
+        返回景区全部一级景点 POI 的目录，支持按名称 / 分类筛选、分页与地理位置搜索。
+
+        公开接口，可选携带 Token 以结合用户偏好做排序（规划态 N）。
+      operationId: listScenicPois
+      security: []
+      x-plan-status: N
+      parameters:
+        - name: keyword
+          in: query
+          required: false
+          description: 景点名称模糊匹配
+          schema:
+            type: string
+        - name: category
+          in: query
+          required: false
+          description: 景点分类（自然 / 人文 / 美食 / 娱乐）
+          schema:
+            type: string
+            enum: [nature, culture, food, entertainment]
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: lng
+          in: query
+          required: false
+          description: 当前位置经度，配合 lat 可按距离排序 / 过滤
+          schema:
+            type: number
+            format: double
+        - name: lat
+          in: query
+          required: false
+          description: 当前位置纬度，配合 lng 可按距离排序 / 过滤
+          schema:
+            type: number
+            format: double
+      responses:
+        '200':
+          description: 景点 POI 分页列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ScenicPoiListResult'
+
+  /api/v1/scenic/routes/recommend:
+    get:
+      tags:
+        - 景区导览
+      summary: 个性化路线推荐
+      description: |
+        根据游客兴趣偏好和停留时间预算，推荐一条或多条游览路线。
+        **规划中**：尚未在仓库中实现，规划由景区导览与路线推荐子系统提供。
+      operationId: recommendScenicRoutes
+      security: []
+      x-plan-status: N
+      parameters:
+        - name: poiIds
+          in: query
+          required: false
+          description: 已选定的景点 POI ID 列表（可多选），作为路线起点/必经点
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+        - name: preferences
+          in: query
+          required: false
+          description: 兴趣偏好，如 "历史文化"、"自然风光"、"轻松"、"深度"
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+        - name: maxDurationMin
+          in: query
+          required: false
+          description: 最大停留时长（分钟）
+          schema:
+            type: integer
+            minimum: 30
+            maximum: 480
+      responses:
+        '200':
+          description: 推荐成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RouteRecommendResult'
+        '400':
+          description: 参数校验失败
+
+  /api/v1/digital-human/state/switch:
+    post:
+      tags: [数字人管理]
+      summary: 切换数字人状态
+      description: |
+        为当前会话切换数字人的运行状态（idle / listening / thinking / speaking）。
+
+        常用于前端主动控制数字人表现：点击"说话"、停止监听、进入思考态等。
+      operationId: switchDigitalHumanState
+      security: []
+      x-plan-status: N
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DigitalHumanStateSwitchRequest'
+      responses:
+        '200':
+          description: 状态切换成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DigitalHumanStateSwitchResult'
+
+  /api/v1/digital-human/expressions:
+    post:
+      tags: [数字人管理]
+      summary: 设置数字人表情
+      description: |
+        设置数字人当前会话的表情与强度，用于对话中展示对应情绪。
+      operationId: setDigitalHumanExpression
+      security: []
+      x-plan-status: N
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DigitalHumanExpressionRequest'
+      responses:
+        '200':
+          description: 表情设置成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      message:
+                        type: string
+                        example: ok
+
+  /api/v1/admin/auth/login:
+    post:
+      tags: [管理后台]
+      summary: 管理员登录
+      description: |
+        管理员账号密码登录，返回 `token` 与管理员对象。登录成功后 Token 默认有效期 2 小时。
+
+        防暴力破解策略：同 IP / 同账号 5 次失败后锁定 10 分钟（规划态 N）。
+      operationId: adminLogin
+      security: []
+      x-plan-status: N
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  description: 管理员用户名
+                  example: admin
+                password:
+                  type: string
+                  description: 管理员密码（HTTPS 传输，服务端 bcrypt 校验）
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AdminAuthLoginResult'
+        '401':
+          description: 用户名或密码错误
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - type: object
+                    properties:
+                      code:
+                        type: integer
+                        example: 40102
+
+  /api/v1/admin/auth/logout:
+    post:
+      tags: [管理后台]
+      summary: 管理员登出
+      description: |
+        管理员主动登出。服务端可选择将 Token 加入黑名单（若启用）。
+      operationId: adminLogout
+      security:
+        - bearerAuth: []
+      x-plan-status: N
+      responses:
+        '200':
+          description: 登出成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        description: 空对象
+
+  /api/v1/admin/config:
+    get:
+      tags: [管理后台]
+      summary: 查询系统配置（数字人配置读写）
+      description: |
+        返回系统当前生效的运行参数（大模型路由、TTS 供应商、限流阈值、CORS 白名单、数字人默认形象 / 音色 / 语速 / 情绪表现等）。
+
+        本接口为"数字人配置读写"接口之一，GET 读、PUT 写。
+      operationId: getAdminConfig
+      x-plan-status: N
+      responses:
+        '200':
+          description: 系统配置
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AdminConfig'
+        '401':
+          description: 未携带 / 无效 Token
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - type: object
+                    properties:
+                      code:
+                        type: integer
+                        example: 40101
+    put:
+      tags: [管理后台]
+      summary: 更新系统配置（数字人配置读写）
+      description: |
+        以补丁方式更新系统运行参数（含数字人默认形象 / 音色 / 语速 / 情绪表现）。
+        仅允许更新配置字典中已存在的字段；敏感字段（如 JWT_SECRET、API_KEY）不可从此接口修改。
+
+        写操作必须写入审计日志。
+
+        本接口为"数字人配置读写"接口之一，GET 读、PUT 写。
+      operationId: updateAdminConfig
+      x-plan-status: N
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminConfigPatch'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AdminConfig'
+        '400':
+          description: 非法字段或类型不匹配
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - type: object
+                    properties:
+                      code:
+                        type: integer
+                        example: 40001
+        '401':
+          description: 未携带 / 无效 Token
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - type: object
+                    properties:
+                      code:
+                        type: integer
+                        example: 40101
+
+  /api/v1/admin/logs:
+    get:
+      tags: [管理后台]
+      summary: 审计日志查询
+      description: |
+        查询 admin 模块的敏感操作审计日志（登录、登出、配置变更、知识库操作等）。
+
+        支持按操作人、时间范围、关键字过滤。默认返回最近 7 天，最多拉取 30 天。
+      operationId: listAdminLogs
+      x-plan-status: N
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: startDate
+          in: query
+          required: false
+          description: 起始时间（ISO 8601），缺省最近 7 天
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          required: false
+          description: 结束时间（ISO 8601）
+          schema:
+            type: string
+            format: date-time
+        - name: userId
+          in: query
+          required: false
+          description: 按操作人 ID 过滤
+          schema:
+            type: string
+        - name: keyword
+          in: query
+          required: false
+          description: 按日志内容关键字模糊搜索
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 审计日志分页
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AdminLogListResult'
+        '401':
+          description: 未携带 / 无效 Token
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - type: object
+                    properties:
+                      code:
+                        type: integer
+                        example: 40101
+
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        管理员及需要鉴权的业务接口使用 Bearer JWT。
+        Token 由 `POST /api/v1/admin/auth/login` 签发，有效期默认 2 小时。
   parameters:
     TaskId:
       name: taskId
@@ -631,7 +1219,6 @@ components:
       schema:
         type: string
         format: uuid
-
   schemas:
     ApiResult:
       type: object
@@ -884,3 +1471,238 @@ components:
         score:
           type: number
           description: 相似度得分，越大越相关（伪向量兜底时无意义）
+
+    ScenicPoiListResult:
+      type: object
+      properties:
+        total:
+          type: integer
+          example: 28
+        page:
+          type: integer
+          example: 1
+        pageSize:
+          type: integer
+          example: 20
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScenicPoi'
+
+    ScenicPoi:
+      type: object
+      properties:
+        poiId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: 雷峰塔
+        category:
+          type: string
+          enum: [nature, culture, food, entertainment]
+        thumbnail:
+          type: string
+          format: uri
+        briefIntro:
+          type: string
+        location:
+          type: string
+          example: 浙江省杭州市西湖区
+        geoPoint:
+          type: object
+          nullable: true
+          properties:
+            lat:
+              type: number
+              format: double
+            lng:
+              type: number
+              format: double
+
+    RoutePoi:
+      type: object
+      properties:
+        id:
+          type: string
+          description: POI ID
+        name:
+          type: string
+          description: POI 名称
+        order:
+          type: integer
+          minimum: 1
+          description: 在推荐路线中的游览顺序
+        distanceKm:
+          type: number
+          format: double
+          minimum: 0
+          description: 与上一个 POI 的段距离（公里）
+        durationMin:
+          type: integer
+          minimum: 0
+          description: 在该 POI 的建议停留时长（分钟）
+
+    RouteItem:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 路线推荐 ID
+        title:
+          type: string
+          description: 路线标题
+        summary:
+          type: string
+          description: 路线摘要
+        totalDistanceKm:
+          type: number
+          format: double
+          minimum: 0
+        totalDurationMin:
+          type: integer
+          minimum: 0
+        pois:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoutePoi'
+
+    RouteRecommendResult:
+      allOf:
+        - $ref: '#/components/schemas/ApiResult'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/RouteItem'
+
+    DigitalHumanStateSwitchRequest:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [idle, listening, thinking, speaking]
+          description: 目标状态
+        streamId:
+          type: string
+          format: uuid
+          nullable: true
+          description: 关联的会话 / SSE 流标识（可选）
+
+    DigitalHumanStateSwitchResult:
+      allOf:
+        - $ref: '#/components/schemas/ApiResult'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                state:
+                  type: string
+                  enum: [idle, listening, thinking, speaking]
+                streamId:
+                  type: string
+                  format: uuid
+                  nullable: true
+
+    DigitalHumanExpressionRequest:
+      type: object
+      required: [expression, intensity]
+      properties:
+        expression:
+          type: string
+          enum: [happy, neutral, curious, sorry, excited]
+          description: 表情类型
+        intensity:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: 表情强度，0-1
+          example: 0.8
+
+    AdminAuthLoginResult:
+      type: object
+      properties:
+        token:
+          type: string
+          description: "Bearer JWT，格式 Authorization: Bearer {token}"
+        tokenType:
+          type: string
+          example: Bearer
+        expiresIn:
+          type: integer
+          description: 剩余有效期（秒）
+          example: 7200
+        admin:
+          type: object
+          properties:
+            adminId:
+              type: string
+              format: uuid
+            username:
+              type: string
+            role:
+              type: string
+              enum: [admin]
+
+    AdminConfig:
+      type: object
+      description: 系统生效配置（敏感字段掩码返回）
+      additionalProperties: true
+
+    AdminConfigPatch:
+      type: object
+      description: 系统配置补丁（仅允许非敏感字段）
+      additionalProperties: true
+
+    AdminLogListResult:
+      type: object
+      properties:
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminLogItem'
+
+    AdminLogItem:
+      type: object
+      properties:
+        logId:
+          type: integer
+          description: 自增主键
+        userId:
+          type: string
+          description: 操作人 ID
+        username:
+          type: string
+          description: 操作人用户名
+        action:
+          type: string
+          description: 动作类型（如 login / logout / config_update / kb_upload / kb_delete / kb_reindex 等）
+        target:
+          type: string
+          nullable: true
+          description: 操作目标 ID 或描述
+        summary:
+          type: string
+          description: 人类可读的操作摘要
+        ip:
+          type: string
+          format: ipv4
+          description: 客户端 IP
+        userAgent:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [success, failed]
+        createdAt:
+          type: string
+          format: date-time
