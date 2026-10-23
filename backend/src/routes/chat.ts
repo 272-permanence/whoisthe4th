@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { config } from '../config.js';
 import { searchKnowledge, getDocument } from '../services/kbKnowledgeBaseService.js';
-import { saveConversation, saveRagSources, newSessionId } from '../services/conversationStore.js';
+import { saveConversation, saveRagSources, newSessionId, ensureSession, loadSessionHistory } from '../services/conversationStore.js';
 import { initSseStream, sendSseEvent, startSseHeartbeat, SseEventEnum } from '../common/sse.js';
 import { createLogger } from '../common/logger.js';
 import { ErrorCodeEnum } from '../common/errorCodes.js';
@@ -100,11 +100,37 @@ router.post('/stream', async (req: Request, res: Response) => {
   const stopHeartbeat = startSseHeartbeat(res);
 
   try {
-    const fullAssistantReply = await streamFromDashScope(chatMessages, res, ragSources);
+    // ========== 会话管理 ==========
+    // sessionId：前端传了就复用（多轮对话），没传就新生成
+    const providedSessionId = req.body?.sessionId;
+    const isNewSession = !providedSessionId;
+    const sessionId = providedSessionId ?? newSessionId();
+
+    // 确保 chat_session 存在（首条消息时自动生成会话标题）
+    await ensureSession(
+      sessionId,
+      req.body?.userId,
+      isNewSession ? (userQuestion.length > 30 ? userQuestion.slice(0, 30) + '...' : userQuestion) : undefined
+    );
+
+    // 多轮对话：加载历史作为 LLM 上下文（最多最近 10 条）
+    if (!isNewSession) {
+      const history = await loadSessionHistory(sessionId);
+      if (history.length > 0) {
+        const recent = history.slice(-10);
+        const historyMessages = recent.map(h => ({ role: h.role, content: h.content }));
+        // 把历史插到 system 和当前用户消息之间
+        const systemMsgs = chatMessages.filter(m => m.role === 'system');
+        const nonSystemMsgs = chatMessages.filter(m => m.role !== 'system');
+        chatMessages = [...systemMsgs, ...historyMessages, ...nonSystemMsgs];
+        log.INFO(`多轮对话: session=${sessionId} 加载历史 ${history.length} 条，取最近 ${recent.length} 条`);
+      }
+    }
+
+    // ========== LLM 流式生成 ==========
+    const fullAssistantReply = await streamFromDashScope(chatMessages, res, ragSources, sessionId);
 
     // ========== 持久化到 MySQL ==========
-    // sessionId：前端可以通过 messages 数组长度判断多轮，这里简化为每次生成一个
-    const sessionId = req.body?.sessionId ?? newSessionId();
     const ragUsed = ragSources.length > 0;
 
     // 保存 user 消息
@@ -144,6 +170,7 @@ async function streamFromDashScope(
   messages: Array<{ role: string; content: string }>,
   res: Response,
   ragSources: RagSource[] = [],
+  sessionId?: string,
 ): Promise<string> {
   const { apiKey, model, baseUrl } = config.dashscope;
 
@@ -207,7 +234,11 @@ async function streamFromDashScope(
     }
   }
 
-  sendSseEvent(res, SseEventEnum.DONE, { fullContent, sources: ragSources.length > 0 ? ragSources : undefined });
+  sendSseEvent(res, SseEventEnum.DONE, {
+    fullContent,
+    sources: ragSources.length > 0 ? ragSources : undefined,
+    sessionId,
+  });
 
   return fullContent;
 }
