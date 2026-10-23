@@ -42,6 +42,29 @@ export function newSessionId(): string {
 }
 
 /**
+ * 确保 chat_session 表中存在该会话记录（不存在则创建）
+ * 对应 D 建表脚本中的 chat_session 表（成员B 负责写入）
+ * @param sessionId 会话唯一标识
+ * @param userId 游客标识（可选）
+ * @param title 会话标题（可选，取首条用户消息摘要）
+ */
+export async function ensureSession(
+  sessionId: string,
+  userId?: string,
+  title?: string
+): Promise<void> {
+  try {
+    const pool = getDbPool();
+    await pool.execute(
+      'INSERT IGNORE INTO chat_session (session_id, user_id, status, title) VALUES (?, ?, ?, ?)',
+      [sessionId, userId ?? null, 'active', title ?? null]
+    );
+  } catch (err) {
+    log.WARN(`chat_session 写入失败（可能 MySQL 未配置或表不存在）: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
+/**
  * 保存一条消息到 conversation 表
  * @returns 插入的自增 ID（MySQL 可用时）或 -1（内存回退）
  */
@@ -53,6 +76,11 @@ export async function saveConversation(
 ): Promise<number> {
   try {
     const pool = getDbPool();
+    // 先确保 chat_session 存在（多轮对话共用同一 session_id）
+    await pool.execute(
+      'INSERT IGNORE INTO chat_session (session_id, status) VALUES (?, ?)',
+      [sessionId, 'active']
+    );
     const [rows] = await pool.execute(
       'INSERT INTO conversation (session_id, role, content, rag_used) VALUES (?, ?, ?, ?)',
       [sessionId, role, content, ragUsed ? 1 : 0]
