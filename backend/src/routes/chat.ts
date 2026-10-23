@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { config } from '../config.js';
 import { searchKnowledge, getDocument } from '../services/kbKnowledgeBaseService.js';
 import { saveConversation, saveRagSources, newSessionId } from '../services/conversationStore.js';
+import { getRouteContextIfNeeded } from '../services/routeService.js';
 import { initSseStream, sendSseEvent, startSseHeartbeat, SseEventEnum } from '../common/sse.js';
 import { createLogger } from '../common/logger.js';
 import { ErrorCodeEnum } from '../common/errorCodes.js';
@@ -90,6 +91,25 @@ router.post('/stream', async (req: Request, res: Response) => {
     }
   } catch (err) {
     log.WARN(`RAG 检索失败，降级为纯 LLM 回答: ${err instanceof Error ? err.message : err}`);
+  }
+
+  // ========== 路线推荐上下文（命中路线关键词时注入） ==========
+  try {
+    const routeContext = await getRouteContextIfNeeded(userQuestion);
+    if (routeContext) {
+      const systemMsg = chatMessages.find(m => m.role === 'system');
+      if (systemMsg) {
+        systemMsg.content += '\n\n' + routeContext;
+      } else {
+        chatMessages.unshift({
+          role: 'system',
+          content: '你是一个专业的景区导览AI助手。\n\n' + routeContext,
+        });
+      }
+      log.INFO('路线推荐上下文已注入 system prompt');
+    }
+  } catch (err) {
+    log.WARN(`路线上下文加载失败: ${err instanceof Error ? err.message : err}`);
   }
 
   // 设置 SSE 响应头（用队友 common/sse.ts 统一封装）
