@@ -5,7 +5,11 @@
  * @description 埋点上报、统计查询、SSE 实时推送
  */
 
-const BASE_URL = 'http://localhost:3000/api/v1/analytics';
+import { apiFetch } from '../common/apiClient';
+import { API_BASE_URL } from '../constants/apiConstants';
+
+/** 数据洞察模块接口前缀 */
+const ANALYTICS_API_PREFIX = '/api/v1/analytics';
 
 export interface SentimentDist {
   positive: number;
@@ -41,22 +45,29 @@ export async function reportInteraction(params: {
   response?: string;
   scenicSpot?: string;
 }): Promise<{ id: number; sentimentScore: number; sentimentLabel: string }> {
-  const res = await fetch(`${BASE_URL}/log`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(params)
-  });
-  const json = await res.json();
-  return json.data;
+  try {
+    return await apiFetch<{ id: number; sentimentScore: number; sentimentLabel: string }>('/log', {
+      apiPrefix: ANALYTICS_API_PREFIX,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
+    });
+  } catch (error) {
+    console.error('[Analytics] 埋点上报失败', error);
+    throw error;
+  }
 }
 
 /**
  * 获取统计数据（初次加载）
  */
 export async function getStats(): Promise<AnalyticsStats> {
-  const res = await fetch(`${BASE_URL}/stats`);
-  const json = await res.json();
-  return json.data;
+  try {
+    return await apiFetch<AnalyticsStats>('/stats', { apiPrefix: ANALYTICS_API_PREFIX });
+  } catch (error) {
+    console.error('[Analytics] 获取统计数据失败', error);
+    throw error;
+  }
 }
 
 /**
@@ -65,15 +76,19 @@ export async function getStats(): Promise<AnalyticsStats> {
  * @returns 关闭连接的函数
  */
 export function connectStatsStream(onStats: (stats: AnalyticsStats) => void): () => void {
-  const eventSource = new EventSource(`${BASE_URL}/stream`);
+  const eventSource = new EventSource(`${API_BASE_URL}${ANALYTICS_API_PREFIX}/stream`);
 
   eventSource.addEventListener('stats', (event: MessageEvent) => {
-    const stats = JSON.parse(event.data) as AnalyticsStats;
-    onStats(stats);
+    try {
+      const stats = JSON.parse(event.data) as AnalyticsStats;
+      onStats(stats);
+    } catch (error) {
+      console.error('[Analytics] SSE 数据解析失败', error);
+    }
   });
 
   eventSource.addEventListener('connected', () => {
-    console.log('[Analytics] SSE 连接已建立');
+    console.info('[Analytics] SSE 连接已建立');
   });
 
   eventSource.onerror = () => {
@@ -82,5 +97,6 @@ export function connectStatsStream(onStats: (stats: AnalyticsStats) => void): ()
 
   return () => {
     eventSource.close();
+    console.info('[Analytics] SSE 连接已关闭');
   };
 }

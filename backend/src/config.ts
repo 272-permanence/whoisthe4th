@@ -34,6 +34,9 @@ const DEFAULT_DASHSCOPE_MODEL = 'qwen-plus';
 const DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
 /** 知识库默认向量模型（需与成员B 的 RAG 链路保持一致） */
 const DEFAULT_EMBEDDING_MODEL = 'bge-m3';
+/** MySQL 读写分离默认端口：主库负责写、从库负责读 */
+const DEFAULT_DB_MASTER_PORT = 3307;
+const DEFAULT_DB_SLAVE_PORT = 3308;
 
 /** ASR 提供方：mock 离线桩 / whisper-api 远程接口 / whisper-cli 本地 Whisper 可执行程序 */
 export type AsrProvider = 'mock' | 'whisper-api' | 'whisper-cli';
@@ -128,5 +131,23 @@ export const config = {
     user: readText('DB_USER', 'root'),
     password: readText('DB_PASSWORD', ''),
     database: readText('DB_NAME', 'scenic_ai')
+  },
+
+  /**
+   * MySQL 读写分离（成员D · 数据洞察模块）
+   * master 负责写、slave 负责读，主从复制由 MySQL 层保证
+   */
+  db: {
+    database: readText('DB_NAME', 'scenic_ai'),
+    user: readText('DB_USER', 'root'),
+    password: readText('DB_PASSWORD', ''),
+    master: {
+      host: readText('DB_MASTER_HOST', '127.0.0.1'),
+      port: readInt('DB_MASTER_PORT', DEFAULT_DB_MASTER_PORT)
+    },
+    slave: {
+      host: readText('DB_SLAVE_HOST', '127.0.0.1'),
+      port: readInt('DB_SLAVE_PORT', DEFAULT_DB_SLAVE_PORT)
+    }
   }
 } as const;

@@ -1,0 +1,159 @@
+%% {init: {'theme':'base', 'themeVariables': { 'primaryColor': '#e6f3ff', 'primaryBorderColor': '#4b8fe0', 'primaryTextColor': '#133', 'lineColor': '#7a7a7a'}}}
+%% 景区导览 AI 数字人 · 全局数据库 ER 图
+%% 维护人：第八组 成员D（数据库统一负责人）
+%% 建表脚本：backend/sql/01_schema.sql
+%% 实体归属：A=多模态交互  B=智能问答  C=知识库管理  D=数据洞察与运营大屏  P=公共新增（需求 3.2.2 / 3.2.3）
+erDiagram
+    audio_log ||--o{ asr_result : "audio_log_id"
+    conversation ||--o{ rag_source : "conv_id"
+    knowledge_doc ||--o{ chunk_index : "doc_id"
+    interaction_log ||--o| sentiment_data : "log_id"
+    route ||--o{ route_poi : "route_id"
+    poi ||--o{ route_poi : "poi_id"
+
+    audio_log {
+        bigint id PK "自增主键"
+        varchar request_id "请求唯一标识"
+        varchar filename "原始文件名"
+        varchar mime_type "音频 MIME 类型（A）"
+        bigint size_bytes "文件体积（字节）"
+        int duration_ms "音频时长（毫秒）"
+        int sampling_rate "采样率（Hz）"
+        tinyint channels "声道数"
+        datetime created_at "创建时间"
+    }
+
+    asr_result {
+        bigint id PK "自增主键"
+        varchar request_id "请求唯一标识"
+        bigint audio_log_id FK "关联 audio_log.id（A）"
+        varchar provider "识别提供方 mock / whisper-api / whisper-cli"
+        text text "识别出的文本"
+        int duration_ms "识别耗时（毫秒）"
+        varchar status "success / failed / pending"
+        text error_message "失败原因"
+        datetime created_at "创建时间"
+    }
+
+    chat_session {
+        varchar session_id PK "会话唯一标识（B，需求 5.4 表 5.6）"
+        varchar user_id "游客标识（匿名 / 已登录）"
+        enum status "active / closed"
+        varchar title "会话标题（历史列表展示用）"
+        datetime created_at "创建时间"
+    }
+
+    conversation {
+        bigint id PK "自增主键"
+        varchar session_id "会话标识（B，与 chat_session 弱关联）"
+        enum role "user / assistant / system"
+        mediumtext content "消息内容"
+        tinyint rag_used "是否走了 RAG 检索"
+        datetime created_at "创建时间"
+    }
+
+    rag_source {
+        bigint id PK "自增主键"
+        bigint conv_id FK "关联 conversation.id（B）"
+        varchar doc_name "命中的知识库文档名"
+        text snippet "命中的原文片段"
+        decimal score "相似度得分 0 ~ 1"
+        datetime created_at "创建时间"
+    }
+
+    knowledge_doc {
+        bigint id PK "自增主键"
+        varchar document_id "文档业务标识 UUID（C，唯一键）"
+        varchar file_name "原始文件名"
+        varchar extension "扩展名 pdf / docx / md"
+        varchar file_path "解析用的落盘路径"
+        bigint size_bytes "文件体积（字节）"
+        int char_count "提取出的字符数"
+        int page_count "页数"
+        int chunk_count "切片数量"
+        enum status "processing / ready / failed"
+        datetime created_at "创建时间"
+        datetime updated_at "更新时间"
+    }
+
+    chunk_index {
+        bigint id PK "自增主键"
+        varchar chunk_id "知识块标识 <documentId>-<序号>（C，唯一键）"
+        bigint doc_id FK "关联 knowledge_doc.id"
+        int chunk_no "切片序号，从 0 开始"
+        mediumtext content "切片文本（向量本体另存向量库）"
+        varchar vector_id "向量库索引 ID（需求 5.4 表 5.8）"
+        int char_count "切片字符数"
+        datetime created_at "创建时间"
+    }
+
+    interaction_log {
+        bigint id PK "自增主键"
+        varchar user_id "用户标识（D）"
+        text message "用户提问原文"
+        text response "数字人回答"
+        varchar scenic_spot "所属景区 / 景点"
+        datetime created_at "创建时间"
+    }
+
+    sentiment_data {
+        bigint id PK "自增主键"
+        bigint log_id FK "关联 interaction_log.id（D，一对一，唯一键）"
+        decimal score "情感得分 -1.00 ~ 1.00"
+        enum label "positive / neutral / negative"
+        varchar model "产出该结果的分析方案"
+        datetime created_at "创建时间"
+    }
+
+    poi {
+        bigint id PK "自增主键"
+        varchar name "POI 名称（P，需求 3.2.2）"
+        enum category "attraction / facility / landmark / food / other"
+        text description "简介与讲解要点"
+        varchar location "文字位置描述"
+        decimal longitude "经度（可空）"
+        decimal latitude "纬度（可空）"
+        tinyint status "1 启用 0 停用"
+        datetime created_at "创建时间"
+        datetime updated_at "更新时间"
+    }
+
+    route {
+        bigint id PK "自增主键"
+        varchar name "路线名称（P，需求 3.2.2）"
+        varchar theme "路线主题 history / nature / family 等"
+        text description "路线简介"
+        int estimated_minutes "预计游览时长（分钟）"
+        tinyint status "1 启用 0 停用"
+        datetime created_at "创建时间"
+        datetime updated_at "更新时间"
+    }
+
+    route_poi {
+        bigint id PK "自增主键"
+        bigint route_id FK "关联 route.id（P）"
+        bigint poi_id FK "关联 poi.id（P）"
+        int seq "路线内顺序号，从 1 开始"
+        int stay_minutes "建议停留时长（分钟）"
+    }
+
+    digital_human_config {
+        bigint id PK "自增主键"
+        varchar config_key "配置项键（P，唯一键，需求 3.2.3）"
+        text config_value "配置项值（文本或 JSON）"
+        varchar description "配置项说明"
+        datetime created_at "创建时间"
+        datetime updated_at "更新时间"
+    }
+
+    admin_user {
+        bigint id PK "自增主键"
+        varchar username "登录账号（C，唯一键，需求 3.2.4）"
+        varchar password_hash "密码哈希（bcrypt）"
+        varchar display_name "显示名称"
+        enum role "admin / operator"
+        tinyint status "1 正常 0 禁用"
+        datetime last_login_at "最后登录时间"
+        datetime created_at "创建时间"
+        datetime updated_at "更新时间"
+    }

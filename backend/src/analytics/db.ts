@@ -1,69 +1,155 @@
 /**
- * @file SQLite 数据库初始化与连接管理
+ * @file MySQL 读写分离连接管理
  * @author 第八组
- * @date 2026-10-15
- * @description 初始化交互日志表，提供数据库单例
+ * @date 2026-10-20
+ * @description 主库连接池负责写操作，从库连接池负责读操作，主从复制由 MySQL 层保证
  */
 
-import fs from 'fs';
-import Database from 'better-sqlite3';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import mysql from 'mysql2/promise';
+import { config } from '../config.js';
+import { createLogger } from '../common/logger.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const log = createLogger('analytics-db');
 
-// 数据库文件存放在 backend/data/analytics.db
-const DB_PATH = path.resolve(__dirname, '../../data/analytics.db');
-// data/ 目录被 .gitignore 忽略，全新克隆的仓库不会自带，需在首次连接前自动创建
-const DB_DIR = path.dirname(DB_PATH);
+/** SQL 参数类型 */
+type SqlParam = string | number | boolean | Date | null;
 
-let db: Database.Database | null = null;
+/** 主库连接池（写） */
+let masterPool: mysql.Pool | null = null;
+
+/** 从库连接池（读） */
+let slavePool: mysql.Pool | null = null;
 
 /**
- * 获取数据库单例
- * @returns SQLite 数据库实例
+ * 获取主库连接池（写操作走此连接）
+ * @returns 主库连接池
  */
-export function getDb(): Database.Database {
-  if (!db) {
-    // 确保 data/ 目录存在，避免全新克隆的仓库因目录缺失导致 SQLite 直接报 ENOENT
-    fs.mkdirSync(DB_DIR, { recursive: true });
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-    initTables(db);
+export function getMasterPool(): mysql.Pool {
+  if (!masterPool) {
+    try {
+      masterPool = mysql.createPool({
+        host: config.db.master.host,
+        port: config.db.master.port,
+        user: config.db.user,
+        password: config.db.password,
+        database: config.db.database,
+        waitForConnections: true,
+        connectionLimit: 10,
+        charset: 'utf8mb4',
+      });
+      log.INFO(`MySQL 主库连接池创建成功 host=${config.db.master.host} port=${config.db.master.port}`);
+    } catch (error) {
+      log.ERROR(`MySQL 主库连接池创建失败 port=${config.db.master.port}: ${String(error)}`);
+      throw error;
+    }
   }
-  return db;
+  return masterPool;
 }
 
 /**
- * 初始化数据表（幂等操作，表已存在则跳过）
+ * 获取从库连接池（读操作走此连接）
+ * @returns 从库连接池
  */
-function initTables(database: Database.Database): void {
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS interaction_log (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id TEXT NOT NULL,
-      message TEXT NOT NULL,
-      response TEXT,
-      sentiment_score REAL DEFAULT 0,
-      sentiment_label TEXT DEFAULT 'neutral',
-      scenic_spot TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_interaction_created_at
-      ON interaction_log(created_at);
-    CREATE INDEX IF NOT EXISTS idx_interaction_user_id
-      ON interaction_log(user_id);
-  `);
+export function getSlavePool(): mysql.Pool {
+  if (!slavePool) {
+    try {
+      slavePool = mysql.createPool({
+        host: config.db.slave.host,
+        port: config.db.slave.port,
+        user: config.db.user,
+        password: config.db.password,
+        database: config.db.database,
+        waitForConnections: true,
+        connectionLimit: 10,
+        charset: 'utf8mb4',
+      });
+      log.INFO(`MySQL 从库连接池创建成功 host=${config.db.slave.host} port=${config.db.slave.port}`);
+    } catch (error) {
+      log.ERROR(`MySQL 从库连接池创建失败 port=${config.db.slave.port}: ${String(error)}`);
+      throw error;
+    }
+  }
+  return slavePool;
 }
 
 /**
- * 关闭数据库连接
+ * 执行写语句（走主库）
+ * @param sql SQL 语句（使用 ? 占位符）
+ * @param params 参数数组
+ * @returns 执行结果
  */
-export function closeDb(): void {
-  if (db) {
-    db.close();
-    db = null;
+export async function executeWrite<T = mysql.ResultSetHeader>(sql: string, params: SqlParam[] = []): Promise<T> {
+  const [result] = await getMasterPool().execute(sql, params);
+  return result as T;
+}
+
+/**
+ * 执行读语句（走从库）
+ * @param sql SQL 语句（使用 ? 占位符）
+ * @param params 参数数组
+ * @returns 查询结果集
+ */
+export async function executeRead<T = mysql.RowDataPacket[]>(sql: string, params: SqlParam[] = []): Promise<T> {
+  const [rows] = await getSlavePool().execute(sql, params);
+  return rows as T;
+}
+
+/**
+ * 初始化本模块的数据表（幂等操作，表已存在则跳过）
+ * 定义与全组建表脚本 backend/sql/01_schema.sql 中 D 的两张表保持完全一致，
+ * 保证「忘记跑脚本」时后端也能自建表；改结构时两处需同步修改。
+ * - interaction_log  埋点采集写入的用户提问与数字人回答
+ * - sentiment_data   情感分析结果，与 interaction_log 一对一
+ */
+export async function initTables(): Promise<void> {
+  try {
+    await executeWrite(`
+      CREATE TABLE IF NOT EXISTS interaction_log (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        user_id VARCHAR(64) NOT NULL,
+        message TEXT NOT NULL,
+        response TEXT,
+        scenic_spot VARCHAR(128),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_interaction_log_created_at (created_at),
+        INDEX idx_interaction_log_user_id (user_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='交互日志（成员D）'
+    `);
+
+    await executeWrite(`
+      CREATE TABLE IF NOT EXISTS sentiment_data (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        log_id BIGINT NOT NULL,
+        score DECIMAL(4,2) NOT NULL DEFAULT 0,
+        label ENUM('positive', 'neutral', 'negative') NOT NULL DEFAULT 'neutral',
+        model VARCHAR(64) NOT NULL DEFAULT 'lexicon-v1',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_sentiment_data_log_id (log_id),
+        INDEX idx_sentiment_data_label (label),
+        INDEX idx_sentiment_data_created_at (created_at),
+        CONSTRAINT fk_sentiment_data_interaction_log
+          FOREIGN KEY (log_id) REFERENCES interaction_log (id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='情感分析结果（成员D）'
+    `);
+
+    log.INFO('interaction_log / sentiment_data 表初始化成功');
+  } catch (error) {
+    log.ERROR(`数据表初始化失败: ${String(error)}`);
+    throw error;
   }
+}
+
+/**
+ * 关闭数据库连接池
+ */
+export async function closeDb(): Promise<void> {
+  if (masterPool) {
+    await masterPool.end();
+    masterPool = null;
+  }
+  if (slavePool) {
+    await slavePool.end();
+    slavePool = null;
+  }
+  log.INFO('MySQL 连接池已关闭');
 }
