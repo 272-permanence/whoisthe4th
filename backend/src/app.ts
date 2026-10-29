@@ -12,7 +12,9 @@ import chatRouter from './routes/chat.js';
 import analyticsRouter from './analytics/routes.js';
 import asrTtsRouter from './routes/asrTts.js';
 import kbRouter from './routes/kb.js';
+import lostFoundRouter from './routes/lostFound.js';
 import { initTables } from './analytics/db.js';
+import { initTables as initLostFoundTables } from './lostFound/db.js';
 import { ErrorCodeEnum } from './common/errorCodes.js';
 import { HttpError } from './common/httpError.js';
 import { createLogger } from './common/logger.js';
@@ -33,6 +35,7 @@ app.use('/api/v1/chat', chatRouter);
 app.use('/api/v1/analytics', analyticsRouter);
 app.use('/api/v1/asr-tts', asrTtsRouter);
 app.use('/api/v1/kb', kbRouter);
+app.use('/api/v1/lost-found', lostFoundRouter);
 
 // 健康检查接口
 app.get('/health', (_req, res) => {
@@ -59,6 +62,7 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
 async function bootstrap(): Promise<void> {
   try {
     await initTables();
+    await initLostFoundTables();
     app.listen(config.port, () => {
       log.INFO(`后端服务已启动: http://localhost:${config.port}`);
       log.INFO(`允许跨域的前端地址: ${config.frontendUrl}`);

@@ -11,6 +11,8 @@ export const ErrorCodeEnum = {
   INVALID_AUDIO: 40002,
   /** 上传文件超出体积上限 */
   PAYLOAD_TOO_LARGE: 40003,
+  /** 资源不存在 */
+  NOT_FOUND: 40401,
   /** 语音识别服务不可用 */
   ASR_FAILED: 50001,
   /** 语音合成服务不可用 */
