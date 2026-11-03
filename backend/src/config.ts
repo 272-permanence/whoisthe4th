@@ -128,5 +128,11 @@ export const config = {
     user: readText('DB_USER', 'root'),
     password: readText('DB_PASSWORD', ''),
     database: readText('DB_NAME', 'scenic_ai')
+  },
+
+  // JWT 认证配置（成员C）
+  jwt: {
+    secret: readText('JWT_SECRET', 'scenic-ai-dev-secret-change-in-production-2026'),
+    expiresIn: readText('JWT_EXPIRES_IN', '7d')
   }
 } as const;

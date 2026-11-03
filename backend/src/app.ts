@@ -12,6 +12,11 @@ import chatRouter from './routes/chat.js';
 import analyticsRouter from './analytics/routes.js';
 import asrTtsRouter from './routes/asrTts.js';
 import kbRouter from './routes/kb.js';
+import authRouter from './routes/auth.js';
+import productRouter from './routes/product.js';
+import contentRouter from './routes/content.js';
+import adminContentRouter from './routes/adminContent.js';
+import userRouter from './routes/user.js';
 import { ErrorCodeEnum } from './constants/errorCodes.js';
 import { HttpError } from './utils/httpError.js';
 
@@ -29,6 +34,11 @@ app.use('/api/v1/chat', chatRouter);
 app.use('/api/v1/analytics', analyticsRouter);
 app.use('/api/v1/asr-tts', asrTtsRouter);
 app.use('/api/v1/kb', kbRouter);
+app.use('/api/v1/auth', authRouter);
+app.use('/api/v1/products', productRouter);
+app.use('/api/v1/content', contentRouter);
+app.use('/api/v1/admin/content', adminContentRouter);
+app.use('/api/v1/admin/users', userRouter);
 
 // 健康检查接口
 app.get('/health', (_req, res) => {
