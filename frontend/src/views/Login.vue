@@ -25,15 +25,20 @@ async function handleSubmit() {
   }
   loading.value = true;
   try {
-    if (mode.value === 'login') {
-      await loginApi(username.value.trim(), password.value);
+    const loginResult = mode.value === 'login'
+      ? await loginApi(username.value.trim(), password.value)
+      : (await registerApi(username.value.trim(), password.value, nickname.value.trim() || undefined),
+         await loginApi(username.value.trim(), password.value));
+    // 按 role 跳转：admin 进后台，user 进用户端
+    const userRole = loginResult.user.role;
+    const redirect = route.query.redirect as string | undefined;
+    if (redirect) {
+      router.replace(redirect);
+    } else if (userRole === 'admin') {
+      router.replace('/admin');
     } else {
-      await registerApi(username.value.trim(), password.value, nickname.value.trim() || undefined);
-      // 注册成功后直接登录
-      await loginApi(username.value.trim(), password.value);
+      router.replace('/');
     }
-    const redirect = (route.query.redirect as string) || '/';
-    router.replace(redirect);
   } catch (err: unknown) {
     errorMsg.value = err instanceof Error ? err.message : '操作失败';
   } finally {
