@@ -119,5 +119,11 @@ export const config = {
   /** 向量模型名，需与成员B 的 RAG 链路保持一致 */
   embeddingModel: readText('EMBEDDING_MODEL', DEFAULT_EMBEDDING_MODEL),
   /** 向量维度，需与成员B 的 RAG 链路保持一致 */
-  embeddingDimension: readInt('EMBEDDING_DIMENSION', KB_EMBEDDING_DIMENSION)
+  embeddingDimension: readInt('EMBEDDING_DIMENSION', KB_EMBEDDING_DIMENSION),
+
+  // JWT（成员C：后台鉴权）
+  jwt: {
+    secret: readText('JWT_SECRET', 'scenic-ai-dev-secret-change-in-production-2026'),
+    expiresIn: readText('JWT_EXPIRES_IN', '7d')
+  }
 } as const;
