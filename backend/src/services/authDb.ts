@@ -6,30 +6,26 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
+import bcrypt from 'bcryptjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const BACKEND_ROOT = path.resolve(__dirname, '../..');
-// TODO: 生产环境改回 path.resolve(BACKEND_ROOT, 'data/auth.db')
-// 当前用系统临时目录绕开 tsx watch + WAL 共存时的 SQLITE_CANTOPEN 问题
-const DB_PATH = path.resolve(os.tmpdir(), 'whoisthe4th-auth.db');
+const DB_PATH = path.resolve(BACKEND_ROOT, 'data/auth.db');
 
 let db: Database.Database | null = null;
 
 export function getAuthDb(): Database.Database {
   if (!db) {
-    // 确保目录存在（tmpdir 一定存在，这里保底）
     fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
     db = new Database(DB_PATH);
     db.pragma('journal_mode = WAL');
     db.pragma('foreign_keys = ON');
     initTables(db);
     seedDefaultAdmin(db);
-    console.log(`[authDb] auth.db 已打开: ${DB_PATH}`);
   }
   return db;
 }
@@ -70,8 +66,6 @@ function seedDefaultAdmin(database: Database.Database): void {
   const exists = database.prepare('SELECT id FROM admin_user WHERE username = ?').get('admin');
   if (exists) return;
 
-  // 同步 bcrypt hash，避免异步导致后端启动完了但种子还没写入
-  const bcrypt = require('bcryptjs');
   const hash = bcrypt.hashSync('admin123', 10);
   database
     .prepare(
@@ -79,5 +73,4 @@ function seedDefaultAdmin(database: Database.Database): void {
        VALUES (?, ?, 'admin', '系统管理员')`
     )
     .run('admin', hash);
-  console.log('[authDb] 默认管理员已创建: admin / admin123');
 }
