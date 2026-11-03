@@ -57,6 +57,18 @@ const routes = [
 
   // ============ 独立页面（非 TabBar 内） ============
   {
+    path: '/routes',
+    name: 'guide-list',
+    component: () => import('../views/mobile/GuideList.vue'),
+    meta: { title: '游玩攻略' },
+  },
+  {
+    path: '/routes/:id',
+    name: 'guide-detail',
+    component: () => import('../views/mobile/GuideDetail.vue'),
+    meta: { title: '路线详情' },
+  },
+  {
     path: '/qa',
     name: 'qa-panel',
     component: () => import('../views/QaPanel.vue'),
@@ -73,6 +85,12 @@ const routes = [
     name: 'admin-kb',
     component: () => import('../views/admin/KnowledgeBaseAdmin.vue'),
     meta: { title: '知识库管理', requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    path: '/admin/content',
+    name: 'admin-content',
+    component: () => import('../views/admin/ContentAdmin.vue'),
+    meta: { title: '内容管理', requiresAuth: true, requiresAdmin: true },
   },
 
   // 根路径兜底

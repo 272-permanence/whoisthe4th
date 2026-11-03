@@ -1,49 +1,50 @@
 <script setup lang="ts">
 /**
- * @file 移动端首页（成员D · 占位骨架）
- * @description Banner / 快捷入口 / 商品网格 / 热门景点
- *              TODO: 等成员C的商品表 + 成员B的 POI 接口出来后，调 /api/v1/home 聚合接口
- *                    当前先用静态占位数据让 TabBar 能正常跳转
+ * @file 移动端首页（成员D · 接入真实聚合接口）
+ * @description Banner / 快捷入口 / 运营统计 / 热门景点 / 推荐路线 / 商品网格（等成员C）
  * @author 第八组（成员D）
- * @date 2026-10-27
+ * @date 2026-11-03
  */
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { showToast } from 'vant';
+import { showToast, showLoadingToast, closeToast } from 'vant';
+import { fetchHome, type HomeResponse } from '../../api/home';
 
 const router = useRouter();
 
-// ============ 静态占位数据 ============
-const banners = ref([
-  { id: 1, title: '欢迎来到西湖景区 AI 导览', color: 'linear-gradient(135deg, #1989fa, #4db8ff)' },
-  { id: 2, title: '智慧导览 · 沉浸式体验', color: 'linear-gradient(135deg, #07c160, #65d67c)' },
-  { id: 3, title: '语音交互 · 数字人陪伴', color: 'linear-gradient(135deg, #ff976a, #ffc77a)' },
-]);
+const loading = ref(true);
+const banners = ref<HomeResponse['banners']>([]);
+const quickEntries = ref<HomeResponse['quickEntries']>([]);
+const hotPois = ref<HomeResponse['hotPois']>([]);
+const recommendedRoutes = ref<HomeResponse['recommendedRoutes']>([]);
+const hotProducts = ref<HomeResponse['hotProducts']>([]);
+const stats = ref<HomeResponse['stats']>({
+  totalInteractions: 0,
+  todayInteractions: 0,
+  positiveRate: 0,
+});
 
-const quickEntries = ref([
-  { icon: 'service-o', label: 'AI 导览', path: '/interaction', color: '#1989fa' },
-  { icon: 'location-o', label: '景色推荐', path: '/poi', color: '#07c160' },
-  { icon: 'guide-o', label: '游玩攻略', path: '/routes', color: '#ff976a' },
-  { icon: 'goods-o', label: '失物招领', path: '/lost-found', color: '#7232dd' },
-]);
-
-const hotProducts = ref([
-  { id: 1, name: '西湖主题文创书签', price: 18 },
-  { id: 2, name: '龙井茶叶礼盒装', price: 168 },
-  { id: 3, name: '雷峰塔纪念章', price: 28 },
-  { id: 4, name: '定制丝巾周边', price: 88 },
-]);
-
-const hotPois = ref([
-  { id: 1, name: '雷峰塔', category: 'landmark' },
-  { id: 2, name: '苏堤春晓', category: 'attraction' },
-  { id: 3, name: '白堤断桥', category: 'attraction' },
-  { id: 4, name: '灵隐寺', category: 'landmark' },
-]);
+async function loadHome() {
+  showLoadingToast({ message: '加载中...', forbidClick: true, duration: 0 });
+  try {
+    const data = await fetchHome();
+    banners.value = data.banners ?? [];
+    quickEntries.value = data.quickEntries ?? [];
+    hotPois.value = data.hotPois ?? [];
+    recommendedRoutes.value = data.recommendedRoutes ?? [];
+    hotProducts.value = data.hotProducts ?? [];
+    stats.value = data.stats ?? stats.value;
+  } catch (err) {
+    showToast((err as Error).message || '首页加载失败');
+  } finally {
+    closeToast();
+    loading.value = false;
+  }
+}
 
 function go(path: string) {
-  // 检查路径是否已注册（routes 里有 /home /interaction /lost-found /profile）
-  const knownPaths = ['/home', '/interaction', '/lost-found', '/profile'];
+  // 只允许已注册的路由跳转；其余（/poi /routes）等成员B页面落地后放开
+  const knownPaths = ['/home', '/interaction', '/lost-found', '/profile', '/admin/kb', '/qa', '/dashboard', '/routes'];
   if (knownPaths.includes(path)) {
     router.push(path);
   } else {
@@ -51,19 +52,24 @@ function go(path: string) {
   }
 }
 
-function productComingSoon() {
-  showToast('商品列表待成员C的商品接口');
+function categoryLabel(cat: string) {
+  const map: Record<string, string> = {
+    landmark: '地标',
+    attraction: '景点',
+    facility: '服务',
+    food: '美食',
+    other: '其他',
+  };
+  return map[cat] ?? cat;
 }
 
-function poiComingSoon() {
-  showToast('景点列表待成员B的 POI 接口');
-}
+onMounted(loadHome);
 </script>
 
 <template>
   <div class="home-page">
     <!-- Banner -->
-    <van-swipe class="home-banner" :autoplay="3000" show-indicator>
+    <van-swipe v-if="banners.length" class="home-banner" :autoplay="3000" show-indicator>
       <van-swipe-item v-for="b in banners" :key="b.id">
         <div class="banner-card" :style="{ background: b.color }">
           <h2>{{ b.title }}</h2>
@@ -71,13 +77,29 @@ function poiComingSoon() {
       </van-swipe-item>
     </van-swipe>
 
+    <!-- 运营统计条 -->
+    <van-cell-group inset class="stats-bar">
+      <div class="stats-item">
+        <div class="stats-num">{{ stats.totalInteractions }}</div>
+        <div class="stats-label">累计交互</div>
+      </div>
+      <div class="stats-divider" />
+      <div class="stats-item">
+        <div class="stats-num">{{ stats.todayInteractions }}</div>
+        <div class="stats-label">今日人次</div>
+      </div>
+      <div class="stats-divider" />
+      <div class="stats-item">
+        <div class="stats-num">{{ (stats.positiveRate * 100).toFixed(0) }}%</div>
+        <div class="stats-label">好评率</div>
+      </div>
+    </van-cell-group>
+
     <!-- 快捷入口网格 -->
     <van-grid column-num="4" :border="false" class="quick-grid">
       <van-grid-item
         v-for="q in quickEntries"
         :key="q.path"
-        :icon="q.icon"
-        :badge="null"
         @click="go(q.path)"
       >
         <template #icon>
@@ -88,31 +110,51 @@ function poiComingSoon() {
     </van-grid>
 
     <!-- 商品推荐 -->
-    <van-cell-group inset class="section">
-      <van-cell title="商品推荐" is-link @click="productComingSoon">
+    <van-cell-group inset class="section" v-if="hotProducts.length">
+      <van-cell title="商品推荐" is-link>
         <template #right-icon><span class="section-more">更多 ›</span></template>
       </van-cell>
       <div class="product-grid">
-        <div v-for="p in hotProducts" :key="p.id" class="product-card" @click="productComingSoon">
+        <div v-for="p in hotProducts" :key="p.id" class="product-card">
           <div class="product-img">🎁</div>
           <div class="product-name">{{ p.name }}</div>
           <div class="product-price">¥{{ p.price }}</div>
         </div>
       </div>
     </van-cell-group>
+    <van-cell-group inset class="section" v-else>
+      <van-cell title="商品推荐" is-link @click="showToast('商品模块待成员C落地')">
+        <template #right-icon><span class="section-more">敬请期待 ›</span></template>
+      </van-cell>
+    </van-cell-group>
+
+    <!-- 推荐路线 -->
+    <van-cell-group inset class="section" v-if="recommendedRoutes.length">
+      <van-cell title="推荐路线" is-link>
+        <template #right-icon><span class="section-more">更多 ›</span></template>
+      </van-cell>
+      <van-cell
+        v-for="r in recommendedRoutes"
+        :key="r.id"
+        :title="r.name"
+        :label="`${r.theme} · 约${r.estimated_minutes}分钟`"
+        is-link
+        @click="showToast('路线详情页待成员B落地')"
+      />
+    </van-cell-group>
 
     <!-- 热门景点 -->
-    <van-cell-group inset class="section">
-      <van-cell title="热门景点" is-link @click="poiComingSoon">
+    <van-cell-group inset class="section" v-if="hotPois.length">
+      <van-cell title="热门景点" is-link>
         <template #right-icon><span class="section-more">更多 ›</span></template>
       </van-cell>
       <van-cell
         v-for="poi in hotPois"
         :key="poi.id"
         :title="poi.name"
-        :label="poi.category === 'landmark' ? '地标' : '景点'"
+        :label="categoryLabel(poi.category)"
         is-link
-        @click="poiComingSoon"
+        @click="showToast('景点详情页待成员B落地')"
       />
     </van-cell-group>
   </div>
@@ -136,6 +178,32 @@ function poiComingSoon() {
 .banner-card h2 {
   font-size: 20px;
   font-weight: 600;
+}
+
+.stats-bar {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  padding: 12px 0;
+}
+.stats-item {
+  flex: 1;
+  text-align: center;
+}
+.stats-num {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1989fa;
+}
+.stats-label {
+  font-size: 12px;
+  color: #969799;
+  margin-top: 2px;
+}
+.stats-divider {
+  width: 1px;
+  height: 28px;
+  background: #ebedf0;
 }
 
 .quick-grid {

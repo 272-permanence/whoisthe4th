@@ -13,6 +13,9 @@ import analyticsRouter from './analytics/routes.js';
 import asrTtsRouter from './routes/asrTts.js';
 import kbRouter from './routes/kb.js';
 import lostFoundRouter from './routes/lostFound.js';
+import homeRouter from './routes/home.js';
+import guideRouter from './routes/guide.js';
+import poiRouter from './routes/poi.js';
 import { initTables } from './analytics/db.js';
 import { initTables as initLostFoundTables } from './lostFound/db.js';
 import { ErrorCodeEnum } from './common/errorCodes.js';
@@ -36,6 +39,9 @@ app.use('/api/v1/analytics', analyticsRouter);
 app.use('/api/v1/asr-tts', asrTtsRouter);
 app.use('/api/v1/kb', kbRouter);
 app.use('/api/v1/lost-found', lostFoundRouter);
+app.use('/api/v1/home', homeRouter);
+app.use('/api/v1/routes', guideRouter);
+app.use('/api/v1/poi', poiRouter);
 
 // 健康检查接口
 app.get('/health', (_req, res) => {

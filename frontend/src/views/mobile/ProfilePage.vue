@@ -39,6 +39,7 @@ const menuGroups = computed(() => [
       { icon: 'bar-chart-o', label: '数据面板', onClick: () => router.push('/dashboard') },
       { icon: 'apps-o', label: '知识库管理', onClick: () => router.push('/admin/kb') },
       { icon: 'shop-o', label: '商品管理', onClick: () => showToast('待成员C的商品管理后台') },
+      { icon: 'edit', label: '内容管理', onClick: () => router.push('/admin/content') },
     ],
   },
   {
