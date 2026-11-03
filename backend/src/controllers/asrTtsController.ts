@@ -71,7 +71,7 @@ export async function handleTranscribe(req: Request, res: Response): Promise<voi
   // 先插录音元数据（此时还没识别，失败也保留上传记录便于排查）
   let audioLogId: number | undefined;
   try {
-    audioLogId = insertAudioLog({
+    audioLogId = await insertAudioLog({
       requestId,
       filename: originalName,
       mimetype: file.mimetype,
@@ -89,7 +89,7 @@ export async function handleTranscribe(req: Request, res: Response): Promise<voi
     });
     // 成功：写 asr_result（status=success）
     try {
-      insertAsrResult({
+      await insertAsrResult({
         requestId,
         audioLogId,
         provider: result.provider,
@@ -104,7 +104,7 @@ export async function handleTranscribe(req: Request, res: Response): Promise<voi
   } catch (error) {
     // 失败也写 asr_result（status=failed + errorMessage），便于后续统计故障率
     try {
-      insertAsrResult({
+      await insertAsrResult({
         requestId,
         audioLogId,
         provider: config.asr.provider,

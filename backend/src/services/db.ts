@@ -1,97 +1,20 @@
 /**
- * @file ASR 模块的 SQLite 数据库初始化与连接管理
+ * @file ASR 模块的数据库访问层（MySQL + mysql2）
  * @author 第八组（成员A）
  * @date 2026-10-20
- * @description 创建 A 负责的两张表：audio_log（录音元数据）、asr_result（识别结果）。
- *              与 D 的 analytics.db 独立存放，未来 D 牵头迁移 PostgreSQL 时，
- *              本模块只需替换 getDb() 内部实现即可适配读写分离连接池。
+ * @date 2026-11-03 迁移：从 SQLite 切换到全组统一的 MySQL 8.0（D 建表脚本 backend/sql/01_schema.sql）
+ * @description A 负责的两张表：audio_log（录音元数据）、asr_result（识别结果）。
+ *              表结构与 D 的 01_schema.sql 第 30-69 行 1:1 对齐，通过 B 的 utils/db.ts
+ *              提供的 getDbPool() 共享连接池，不单独建连接。
+ *              MySQL 未配置时自动降级为 no-op（只打 WARN，不抛异常），
+ *              避免本地开发没装 MySQL 时整个 ASR 流程不可用。
  */
-import fs from 'node:fs';
-import path from 'node:path';
-import Database from 'better-sqlite3';
-import { fileURLToPath } from 'node:url';
+import { getDbPool } from '../utils/db.js';
+import { createLogger } from '../common/logger.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const log = createLogger('asr-db');
 
-// A 的数据库文件存放在 backend/data/asr.db（与 D 的 analytics.db 分离）
-const DB_PATH = path.resolve(__dirname, '../../data/asr.db');
-const DB_DIR = path.dirname(DB_PATH);
-
-let db: Database.Database | null = null;
-
-/**
- * 获取 A 模块专属的数据库单例
- * @returns SQLite 数据库实例
- */
-export function getDb(): Database.Database {
-  if (!db) {
-    fs.mkdirSync(DB_DIR, { recursive: true });
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-    initTables(db);
-  }
-  return db;
-}
-
-/**
- * 初始化 A 模块的数据表（幂等，表已存在则跳过）
- * - audio_log    录音上传时立即插入的元数据记录
- * - asr_result   识别完成后插入的结果记录，request_id 外键关联 audio_log
- */
-function initTables(database: Database.Database): void {
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS audio_log (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      request_id      TEXT    NOT NULL,
-      filename        TEXT    NOT NULL,
-      mime_type       TEXT,
-      size_bytes      INTEGER,
-      duration_ms     INTEGER,
-      sampling_rate   INTEGER,
-      channels        INTEGER,
-      created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_audio_log_request_id
-      ON audio_log(request_id);
-    CREATE INDEX IF NOT EXISTS idx_audio_log_created_at
-      ON audio_log(created_at);
-
-    CREATE TABLE IF NOT EXISTS asr_result (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      request_id      TEXT    NOT NULL,
-      audio_log_id    INTEGER,
-      provider        TEXT    NOT NULL,
-      text            TEXT,
-      duration_ms     INTEGER,
-      status          TEXT    NOT NULL DEFAULT 'success',
-      error_message   TEXT,
-      created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_asr_result_request_id
-      ON asr_result(request_id);
-    CREATE INDEX IF NOT EXISTS idx_asr_result_created_at
-      ON asr_result(created_at);
-    CREATE INDEX IF NOT EXISTS idx_asr_result_provider
-      ON asr_result(provider);
-    CREATE INDEX IF NOT EXISTS idx_asr_result_status
-      ON asr_result(status);
-  `);
-}
-
-/** 关闭数据库连接（用于测试或优雅退出） */
-export function closeDb(): void {
-  if (db) {
-    db.close();
-    db = null;
-  }
-}
-
-// ========================== 便捷写入函数 ==========================
-
-/** 录音日志入参（不含 request_id，调用方负责生成唯一请求 id） */
+/** 录音日志入参 */
 export interface AudioLogInput {
   requestId: string;
   filename: string;
@@ -102,7 +25,7 @@ export interface AudioLogInput {
   channels?: number;
 }
 
-/** 识别结果入参（requestId 与 audio_log 对应，audioLogId 可为空） */
+/** 识别结果入参 */
 export interface AsrResultInput {
   requestId: string;
   audioLogId?: number;
@@ -115,44 +38,57 @@ export interface AsrResultInput {
 
 /**
  * 插入一条录音元数据记录
- * @returns 新插入行的 id
+ * @returns 新插入行的 id；MySQL 未配置时返回 0（no-op）
  */
-export function insertAudioLog(input: AudioLogInput): number {
-  const stmt = getDb().prepare(`
-    INSERT INTO audio_log
-      (request_id, filename, mime_type, size_bytes, duration_ms, sampling_rate, channels)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-  const info = stmt.run(
-    input.requestId,
-    input.filename,
-    input.mimetype ?? null,
-    input.sizeBytes ?? null,
-    input.durationMs ?? null,
-    input.samplingRate ?? null,
-    input.channels ?? null
-  );
-  return Number(info.lastInsertRowid);
+export async function insertAudioLog(input: AudioLogInput): Promise<number> {
+  try {
+    const pool = getDbPool();
+    const [result] = await pool.query(
+      `INSERT INTO audio_log
+         (request_id, filename, mime_type, size_bytes, duration_ms, sampling_rate, channels)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        input.requestId,
+        input.filename,
+        input.mimetype ?? null,
+        input.sizeBytes ?? null,
+        input.durationMs ?? null,
+        input.samplingRate ?? null,
+        input.channels ?? null
+      ]
+    );
+    return Number((result as { insertId: number }).insertId);
+  } catch (err) {
+    // MySQL 未配置或连接失败时只 WARN，不影响 ASR 主流程
+    log.WARN(`audio_log 写入跳过（MySQL 未就绪）: ${err instanceof Error ? err.message : err}`);
+    return 0;
+  }
 }
 
 /**
  * 插入一条识别结果记录
- * @returns 新插入行的 id
+ * @returns 新插入行的 id；MySQL 未配置时返回 0（no-op）
  */
-export function insertAsrResult(input: AsrResultInput): number {
-  const stmt = getDb().prepare(`
-    INSERT INTO asr_result
-      (request_id, audio_log_id, provider, text, duration_ms, status, error_message)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-  const info = stmt.run(
-    input.requestId,
-    input.audioLogId ?? null,
-    input.provider,
-    input.text ?? null,
-    input.durationMs ?? null,
-    input.status ?? 'success',
-    input.errorMessage ?? null
-  );
-  return Number(info.lastInsertRowid);
+export async function insertAsrResult(input: AsrResultInput): Promise<number> {
+  try {
+    const pool = getDbPool();
+    const [result] = await pool.query(
+      `INSERT INTO asr_result
+         (request_id, audio_log_id, provider, text, duration_ms, status, error_message)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        input.requestId,
+        input.audioLogId ?? null,
+        input.provider,
+        input.text ?? null,
+        input.durationMs ?? null,
+        input.status ?? 'success',
+        input.errorMessage ?? null
+      ]
+    );
+    return Number((result as { insertId: number }).insertId);
+  } catch (err) {
+    log.WARN(`asr_result 写入跳过（MySQL 未就绪）: ${err instanceof Error ? err.message : err}`);
+    return 0;
+  }
 }
