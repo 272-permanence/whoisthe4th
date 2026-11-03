@@ -1,52 +1,36 @@
 /**
- * @file MySQL 数据库连接管理
+ * @file MySQL 数据库连接 · 薄封装（成员B 原有单库连接，现已对齐全组读写分离）
  * @author 第八组（成员B）
  * @date 2026-10-20
- * @description 使用 mysql2 连接 MySQL 8.0，提供连接池单例。
- *              未配置 DB_HOST 时连接自动降级，chat 路由里用 try/catch 包裹不会崩。
+ * @description 本文件原先独立 mysql.createPool({ DB_HOST:DB_PORT }) 开一个单池，
+ *              现在改成直接复用 analytics/db.ts 的 master / slave 两套池 ——
+ *                1) 全组只维护两套连接池，避免重复配置与资源浪费
+ *                2) conversationStore 里的 INSERT 走 master、SELECT 走 slave
+ *                3) 本地未做主从时，.env 把 master/slave 配成同一端口即可降级
+ *              保持 getDbPool() / closeDbPool() 签名不变，conversationStore.ts 零改动。
  */
 
-import mysql, { Pool, PoolOptions } from 'mysql2/promise';
-import { config } from '../config.js';
-
-let pool: Pool | null = null;
+import type mysql from 'mysql2/promise';
+import {
+  getMasterPool as analyticsGetMasterPool,
+  getSlavePool as analyticsGetSlavePool,
+  closeDb as closeAnalyticsDb,
+} from '../analytics/db.js';
 
 /**
- * 获取 MySQL 连接池（懒初始化）
- * @returns mysql2 Pool 实例
- * @throws 当 DB_HOST 未配置或连接失败时抛出
+ * 兼容旧代码：默认返回 master pool（写操作 / 不确定时用这个最安全）
+ * 内部实际是 analytics/db.ts 的懒加载单例，首次调用时才真正创建连接
  */
-export function getDbPool(): Pool {
-  if (!pool) {
-    const { host, port, user, password, database } = config.mysql;
-    if (!host || host === 'localhost-unconfigured') {
-      throw new Error('MySQL 未配置，请在 .env 中设置 DB_HOST / DB_USER / DB_PASSWORD / DB_NAME');
-    }
-
-    const options: PoolOptions = {
-      host,
-      port,
-      user,
-      password,
-      database,
-      waitForConnections: true,
-      connectionLimit: 10,
-      queueLimit: 0,
-      charset: 'utf8mb4',
-      // MySQL 8 默认 caching_sha2_password，mysql2 能自动处理
-    };
-
-    pool = mysql.createPool(options);
-    console.log(`[MySQL] 连接池已创建 ${host}:${port}/${database}`);
-  }
-  return pool;
+export function getDbPool(): mysql.Pool {
+  return analyticsGetMasterPool();
 }
 
-/** 优雅关闭（进程退出时调用） */
+/** 明确走从库（读操作用这个，减轻主库压力） */
+export function getSlavePool(): mysql.Pool {
+  return analyticsGetSlavePool();
+}
+
+/** 优雅关闭：调用 analytics/db 的关闭逻辑（会同时关 master + slave） */
 export async function closeDbPool(): Promise<void> {
-  if (pool) {
-    await pool.end();
-    pool = null;
-    console.log('[MySQL] 连接池已关闭');
-  }
+  await closeAnalyticsDb();
 }

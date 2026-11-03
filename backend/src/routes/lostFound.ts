@@ -9,7 +9,7 @@ import { Router, type Request, type Response } from 'express';
 import mysql from 'mysql2/promise';
 import { ErrorCodeEnum } from '../common/errorCodes.js';
 import { createLogger } from '../common/logger.js';
-import { executeSql, executeWrite } from '../lostFound/db.js';
+import { executeSql, executeWrite, executeReadAfterWrite } from '../lostFound/db.js';
 
 const log = createLogger('lostfound');
 const router = Router();
@@ -220,7 +220,8 @@ router.put('/:id', async (req: Request, res: Response) => {
       params as (string | number | boolean | null | Date)[]
     );
 
-    const [updated] = await executeSql<mysql.RowDataPacket[]>(
+    // UPDATE 之后立刻要查回更新结果 —— 强制读主库，避免主从复制延迟导致读旧数据
+    const [updated] = await executeReadAfterWrite<mysql.RowDataPacket[]>(
       'SELECT * FROM lost_found WHERE id = ?',
       [id]
     );

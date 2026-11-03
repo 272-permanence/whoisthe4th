@@ -1,59 +1,21 @@
 /**
- * @file 失物招领模块 · MySQL 数据库连接管理（成员D）
+ * @file 失物招领模块 · MySQL 数据库访问（成员D）
  * @author 第八组（成员D）
  * @date 2026-10-27
- * @description 开发阶段走单一连接池（config.mysql 3306），简化本地调试。
- *              部署时如需读写分离，把 executeRead 切到从库即可。
- *              同时内置 initTables() 保证「忘记跑脚本」时后端也能自建表。
+ * @description 统一复用 analytics/db.ts 提供的 master（写）/ slave（读）连接池，
+ *              不再独立建池。理由：
+ *                1) 读写分离全项目只开两套池（master 3307 + slave 3308），避免重复配置
+ *                2) 主从复制只在 MySQL 层做，应用只负责按操作类型路由 SQL
+ *                3) 本模块的 SELECT 走从库、INSERT/UPDATE/DELETE/CREATE TABLE 走主库
  */
 
-import mysql from 'mysql2/promise';
-import { config } from '../config.js';
 import { createLogger } from '../common/logger.js';
+import { executeRead, executeWrite, executeReadMaster, executeRawDdl } from '../analytics/db.js';
 
 const log = createLogger('lostfound-db');
 
-type SqlParam = string | number | boolean | Date | null;
-
-let pool: mysql.Pool | null = null;
-
-/** 获取连接池（开发阶段单一 3306） */
-export function getPool(): mysql.Pool {
-  if (!pool) {
-    try {
-      pool = mysql.createPool({
-        host: config.mysql.host,
-        port: config.mysql.port,
-        user: config.mysql.user,
-        password: config.mysql.password,
-        database: config.mysql.database,
-        waitForConnections: true,
-        connectionLimit: 10,
-        charset: 'utf8mb4',
-      });
-      log.INFO(`失物招领模块连接成功 host=${config.mysql.host} port=${config.mysql.port}`);
-    } catch (error) {
-      log.ERROR(`失物招领模块连接失败: ${String(error)}`);
-      throw error;
-    }
-  }
-  return pool;
-}
-
-/** 读/写（开发阶段共用一个池，部署时再分） */
-export async function executeSql<T = mysql.RowDataPacket[]>(sql: string, params: SqlParam[] = []): Promise<T> {
-  const [rows] = await getPool().execute(sql, params);
-  return rows as T;
-}
-
-/** 写操作的便捷方法，返回 insertId / affectedRows */
-export async function executeWrite<T = mysql.ResultSetHeader>(sql: string, params: SqlParam[] = []): Promise<T> {
-  const [result] = await getPool().execute(sql, params);
-  return result as T;
-}
-
 /**
- * 自建表（幂等）：保证「忘记跑 02_schema_lost_found.sql」时后端也能起来
+ * 自建表（幂等） —— DDL 必须走主库，从库 read_only 会拒绝
  */
 export async function initTables(): Promise<void> {
   try {
@@ -79,25 +41,40 @@ export async function initTables(): Promise<void> {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
 
-    // 触发器：MySQL 5.5 双 TIMESTAMP 兼容（如果不存在才创建）
-    await executeWrite(`DROP TRIGGER IF EXISTS trg_lost_found_updated_at`).catch(() => {});
-    await executeWrite(`
+    // 触发器：MySQL 5.5 双 TIMESTAMP 兼容（先删后建）
+    // DDL 必须用 query() 不走预处理，否则 MySQL 5.5 会报 "not supported in prepared statement"
+    await executeRawDdl('DROP TRIGGER IF EXISTS trg_lost_found_updated_at').catch(() => {});
+    await executeRawDdl(`
       CREATE TRIGGER trg_lost_found_updated_at BEFORE UPDATE ON lost_found
         FOR EACH ROW SET NEW.updated_at = CURRENT_TIMESTAMP
     `);
 
-    log.INFO('lost_found 表 + 触发器初始化成功');
+    log.INFO('lost_found 表 + 触发器初始化成功（主库 3307）');
   } catch (error) {
     log.ERROR(`lost_found 表初始化失败: ${String(error)}`);
     throw error;
   }
 }
 
-/** 关闭连接池 */
-export async function closeDb(): Promise<void> {
-  if (pool) {
-    await pool.end();
-    pool = null;
-    log.INFO('失物招领连接池已关闭');
-  }
+/** 复用 analytics/db 的 executeWrite —— 写操作走主库 */
+export { executeWrite };
+
+/**
+ * 旧名 executeSql（读/写不分），重命名为 executeRead 并指向从库，
+ * 保留 executeSql 作为兼容别名（警告式）直到路由层全部迁走
+ */
+export async function executeReadLostFound<T = import('mysql2/promise').RowDataPacket[]>(
+  sql: string,
+  params: (string | number | boolean | Date | null)[] = [],
+): Promise<T> {
+  return executeRead<T>(sql, params);
 }
+
+/** 兼容性别名 —— 路由层逐步弃用 */
+export const executeSql = executeReadLostFound;
+
+/**
+ * 执行"写后回读"查询（UPDATE/INSERT 之后立刻 SELECT 回刚写的数据）→ 强制主库。
+ * 普通查询不要用，会给主库加读压力。
+ */
+export const executeReadAfterWrite = executeReadMaster;

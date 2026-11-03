@@ -7,7 +7,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { getDbPool } from '../utils/db.js';
+import { getDbPool, getSlavePool } from '../utils/db.js';
 
 /** 一条对话记录 */
 export interface ConversationRow {
@@ -95,7 +95,8 @@ export async function saveRagSources(convId: number, sources: RagSourceRow[]): P
  */
 export async function loadSessionHistory(sessionId: string): Promise<ConversationRow[]> {
   try {
-    const pool = getDbPool();
+    // SELECT 明确走从库（读写分离：写走 master，读走 slave）
+    const pool = getSlavePool();
     const [rows] = await pool.execute(
       'SELECT id, session_id, role, content, rag_used, created_at FROM conversation WHERE session_id = ? ORDER BY id ASC',
       [sessionId]

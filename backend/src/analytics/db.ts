@@ -95,6 +95,25 @@ export async function executeRead<T = mysql.RowDataPacket[]>(sql: string, params
 }
 
 /**
+ * 执行"写后回读"查询（UPDATE/INSERT 之后立刻 SELECT 回刚写的数据）→ 强制主库
+ */
+export async function executeReadMaster<T = mysql.RowDataPacket[]>(sql: string, params: SqlParam[] = []): Promise<T> {
+  const [rows] = await getMasterPool().execute(sql, params);
+  return rows as T;
+}
+
+/**
+ * 执行 DDL / 预处理不支持的命令（TRIGGER、FUNCTION、CREATE TABLE、DROP 等）→ 主库。
+ * 必须用 query() 而不是 execute()，因为 mysql2 execute() 走预处理协议，
+ * MySQL 5.5 对部分 DDL（DROP TRIGGER、CREATE TRIGGER）会报 "This command is not supported
+ * in the prepared statement protocol yet"。
+ * 无参数，纯 SQL 文本。
+ */
+export async function executeRawDdl(sql: string): Promise<unknown> {
+  return getMasterPool().query(sql);
+}
+
+/**
  * 初始化本模块的数据表（幂等操作，表已存在则跳过）
  * 定义与全组建表脚本 backend/sql/01_schema.sql 中 D 的两张表保持完全一致，
  * 保证「忘记跑脚本」时后端也能自建表；改结构时两处需同步修改。
@@ -103,6 +122,9 @@ export async function executeRead<T = mysql.RowDataPacket[]>(sql: string, params
  */
 export async function initTables(): Promise<void> {
   try {
+    // 建表 SQL 必须与 backend/sql/01_schema_mysql55.sql 保持完全一致，
+    // 该脚本的 DATETIME 已迁回 TIMESTAMP（MySQL 5.5 不支持 DATETIME DEFAULT CURRENT_TIMESTAMP）。
+    // 改表结构时两处需同步修改。
     await executeWrite(`
       CREATE TABLE IF NOT EXISTS interaction_log (
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -110,7 +132,7 @@ export async function initTables(): Promise<void> {
         message TEXT NOT NULL,
         response TEXT,
         scenic_spot VARCHAR(128),
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_interaction_log_created_at (created_at),
         INDEX idx_interaction_log_user_id (user_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='交互日志（成员D）'
@@ -123,7 +145,7 @@ export async function initTables(): Promise<void> {
         score DECIMAL(4,2) NOT NULL DEFAULT 0,
         label ENUM('positive', 'neutral', 'negative') NOT NULL DEFAULT 'neutral',
         model VARCHAR(64) NOT NULL DEFAULT 'lexicon-v1',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY uk_sentiment_data_log_id (log_id),
         INDEX idx_sentiment_data_label (label),
         INDEX idx_sentiment_data_created_at (created_at),

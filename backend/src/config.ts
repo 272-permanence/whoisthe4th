@@ -124,18 +124,14 @@ export const config = {
   /** 向量维度，需与成员B 的 RAG 链路保持一致 */
   embeddingDimension: readInt('EMBEDDING_DIMENSION', KB_EMBEDDING_DIMENSION),
 
-  // MySQL 物理数据库（任务3）
-  mysql: {
-    host: readText('DB_HOST', 'localhost-unconfigured'),
-    port: readInt('DB_PORT', 3306),
-    user: readText('DB_USER', 'root'),
-    password: readText('DB_PASSWORD', ''),
-    database: readText('DB_NAME', 'scenic_ai')
-  },
+  // MySQL 物理数据库 —— 已迁移到下方 db 统一配置，config.mysql 废弃
+  // （此前成员B 的单库 3306 配置：host/port/user/password/database）
+  // 请改用 db.master / db.slave 读写分离
 
   /**
-   * MySQL 读写分离（成员D · 数据洞察模块）
+   * MySQL 读写分离（成员D · 数据洞察模块牵头，全组复用）
    * master 负责写、slave 负责读，主从复制由 MySQL 层保证
+   * 本地未做主从时，把 master 和 slave 都指向同一端口即可（降级为单库）
    */
   db: {
     database: readText('DB_NAME', 'scenic_ai'),
