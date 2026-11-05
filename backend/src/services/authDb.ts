@@ -86,7 +86,7 @@ function initTables(database: Database.Database): void {
 function migrateSchema(database: Database.Database): void {
   // admin_user.status
   try { database.prepare('SELECT status FROM admin_user LIMIT 1').run(); }
-  catch { database.exec('ALTER TABLE admin_user ADD COLUMN status TEXT NOT NULL DEFAULT "active"'); }
+  catch { database.exec(`ALTER TABLE admin_user ADD COLUMN status TEXT NOT NULL DEFAULT 'active'`); }
   // product.published
   try { database.prepare('SELECT published FROM product LIMIT 1').run(); }
   catch { database.exec('ALTER TABLE product ADD COLUMN published INTEGER NOT NULL DEFAULT 1'); }

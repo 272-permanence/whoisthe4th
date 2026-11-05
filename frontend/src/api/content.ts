@@ -97,6 +97,35 @@ export async function togglePublishContent(id: number): Promise<{ id: number; pu
   return payload.data;
 }
 
+// ==================== 图片上传（admin 专属） ====================
+
+export interface UploadImageResult {
+  url: string;
+  filename: string;
+  size: number;
+}
+
+/** 上传图片到后端，返回可直接访问的 URL（相对路径，如 /uploads/xxx.jpg） */
+export async function uploadImage(file: File): Promise<UploadImageResult> {
+  const formData = new FormData();
+  formData.append('image', file);
+  const res = await fetch(`${API_BASE_URL}/api/v1/admin/upload`, {
+    method: 'POST',
+    headers: authHeaders(), // 注意：不要手动设 Content-Type，浏览器会自动带 boundary
+    body: formData
+  });
+  const payload = (await res.json()) as ApiResult<UploadImageResult>;
+  if (!res.ok || payload.code !== 0) throw new Error(payload.message);
+  return payload.data;
+}
+
+/** 把后端返回的相对 URL 拼成完整可访问地址 */
+export function resolveImageUrl(url: string | null | undefined): string {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+}
+
 // ==================== 用户管理（admin 专属） ====================
 
 export interface AdminUser {

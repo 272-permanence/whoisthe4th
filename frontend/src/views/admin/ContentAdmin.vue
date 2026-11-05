@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
-import { listAllContent, createContent, updateContent, deleteContent, togglePublishContent, type ContentItem, type ContentType } from '../../api/content';
+import { ref, onMounted } from 'vue';
+import { listAllContent, createContent, updateContent, deleteContent, togglePublishContent, uploadImage, resolveImageUrl, type ContentItem, type ContentType } from '../../api/content';
 
 const TABS: { key: ContentType; label: string }[] = [
   { key: 'carousel', label: '首页轮播' },
@@ -16,6 +16,8 @@ const loading = ref(false);
 const showForm = ref(false);
 const editing = ref<ContentItem | null>(null);
 const errorMsg = ref('');
+const uploading = ref(false);
+const fileInput = ref<HTMLInputElement | null>(null);
 
 const form = ref({
   title: '', subtitle: '', content: '', image_url: '',
@@ -93,6 +95,39 @@ async function handleDelete(c: ContentItem) {
   catch (err: unknown) { errorMsg.value = err instanceof Error ? err.message : '删除失败'; }
 }
 
+function triggerUpload() {
+  fileInput.value?.click();
+}
+
+async function handleFileChange(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  // 前端粗校验：类型 + 大小（5MB）
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  if (!allowed.includes(file.type)) {
+    errorMsg.value = `不支持的图片类型：${file.type}`;
+    input.value = '';
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    errorMsg.value = '图片不能超过 5MB';
+    input.value = '';
+    return;
+  }
+  uploading.value = true;
+  errorMsg.value = '';
+  try {
+    const result = await uploadImage(file);
+    form.value.image_url = result.url;
+  } catch (err: unknown) {
+    errorMsg.value = err instanceof Error ? err.message : '上传失败';
+  } finally {
+    uploading.value = false;
+    input.value = ''; // 允许连续选同一文件
+  }
+}
+
 onMounted(loadList);
 </script>
 
@@ -154,7 +189,26 @@ onMounted(loadList);
         <label>标题 * <input v-model="form.title" /></label>
         <label>副标题 <input v-model="form.subtitle" /></label>
         <label>主内容 <textarea v-model="form.content" rows="3"></textarea></label>
-        <label>图片 URL <input v-model="form.image_url" placeholder="可选" /></label>
+        <label>
+          图片
+          <div class="image-field">
+            <input v-model="form.image_url" placeholder="/uploads/xxx.jpg 或 https://..." />
+            <button type="button" class="upload-btn" :disabled="uploading" @click="triggerUpload">
+              {{ uploading ? '上传中...' : '上传图片' }}
+            </button>
+            <input
+              ref="fileInput"
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              style="display: none"
+              @change="handleFileChange"
+            />
+          </div>
+        </label>
+        <div v-if="form.image_url" class="image-preview">
+          <img :src="resolveImageUrl(form.image_url)" alt="预览" />
+          <button type="button" class="clear-btn" @click="form.image_url = ''">移除</button>
+        </div>
         <div class="row">
           <label>排序值 <input type="number" v-model.number="form.sort_order" /></label>
           <label class="check">
@@ -209,4 +263,13 @@ onMounted(loadList);
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 .modal-actions button { padding: 8px 18px; border: 1px solid #ddd; background: #fff; border-radius: 5px; cursor: pointer; }
 .modal-actions .primary { background: #667eea; color: #fff; border-color: #667eea; }
+.image-field { display: flex; gap: 8px; margin-top: 4px; }
+.image-field input { flex: 1; margin-top: 0; }
+.upload-btn { padding: 0 14px; border: 1px solid #667eea; background: #fff; color: #667eea; border-radius: 5px; cursor: pointer; white-space: nowrap; }
+.upload-btn:hover:not(:disabled) { background: #667eea; color: #fff; }
+.upload-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.image-preview { margin: -6px 0 12px; display: flex; align-items: center; gap: 10px; }
+.image-preview img { max-width: 200px; max-height: 100px; border-radius: 6px; border: 1px solid #eee; object-fit: cover; }
+.clear-btn { padding: 4px 10px; border: 1px solid #ff8a8a; color: #d33; background: #fff; border-radius: 4px; cursor: pointer; font-size: 12px; }
+.clear-btn:hover { background: #fff0f0; }
 </style>

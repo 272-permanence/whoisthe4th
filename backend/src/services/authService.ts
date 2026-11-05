@@ -61,7 +61,7 @@ export function register(username: string, password: string, nickname?: string):
   const hash = bcrypt.hashSync(password, 10);
   const result = db
     .prepare(
-      'INSERT INTO admin_user (username, password_hash, role, nickname, status) VALUES (?, ?, ?, ?, "active")'
+      `INSERT INTO admin_user (username, password_hash, role, nickname, status) VALUES (?, ?, ?, ?, 'active')`
     )
     .run(username, hash, 'user', nickname ?? null);
   return { id: Number(result.lastInsertRowid) };
@@ -97,7 +97,7 @@ export function createUser(
   const hash = bcrypt.hashSync(password, 10);
   const result = db
     .prepare(
-      'INSERT INTO admin_user (username, password_hash, role, nickname, status) VALUES (?, ?, ?, ?, "active")'
+      `INSERT INTO admin_user (username, password_hash, role, nickname, status) VALUES (?, ?, ?, ?, 'active')`
     )
     .run(username, hash, role, nickname ?? null);
   return { id: Number(result.lastInsertRowid) };

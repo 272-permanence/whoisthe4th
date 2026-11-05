@@ -17,6 +17,7 @@ import productRouter from './routes/product.js';
 import contentRouter from './routes/content.js';
 import adminContentRouter from './routes/adminContent.js';
 import userRouter from './routes/user.js';
+import uploadRouter, { UPLOAD_DIR } from './routes/upload.js';
 import { ErrorCodeEnum } from './constants/errorCodes.js';
 import { HttpError } from './utils/httpError.js';
 
@@ -39,6 +40,10 @@ app.use('/api/v1/products', productRouter);
 app.use('/api/v1/content', contentRouter);
 app.use('/api/v1/admin/content', adminContentRouter);
 app.use('/api/v1/admin/users', userRouter);
+app.use('/api/v1/admin/upload', uploadRouter);
+
+// 静态托管：用户端可直接访问后台上传的图片（http://localhost:8000/uploads/xxx.jpg）
+app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d' }));
 
 // 健康检查接口
 app.get('/health', (_req, res) => {
