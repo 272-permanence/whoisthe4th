@@ -57,39 +57,95 @@ function handleLogout() {
 </template>
 
 <style scoped>
-.admin-layout { display: flex; min-height: 100vh; background: #f5f6fa; }
+/* 外壳：浅色青绿主题，颜色全部取自 tokens.css */
+.admin-layout {
+  display: flex;
+  min-height: 100vh;
+  background: var(--color-bg);
+  font-family: var(--font-sans);
+  color: var(--color-text);
+}
 .sidebar {
-  width: 220px; background: #1e272e; color: #dcdde1;
-  display: flex; flex-direction: column; flex-shrink: 0;
+  width: 220px;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
 }
 .sidebar-header {
-  padding: 20px 16px; border-bottom: 1px solid #2f3640;
-  display: flex; align-items: center; gap: 8px;
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
-.sidebar-header .logo { font-size: 22px; }
-.sidebar-header .app-name { font-weight: 600; color: #fff; font-size: 14px; }
-.menu { padding: 12px 0; flex: 1; }
+.sidebar-header .logo { font-size: 20px; }
+.sidebar-header .app-name {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  color: var(--color-text);
+  font-size: var(--text-body);
+  letter-spacing: 0.02em;
+}
+.menu { padding: var(--space-2) 0; flex: 1; }
 .menu-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 11px 16px; color: #b2bec3; text-decoration: none;
-  font-size: 14px; border-left: 3px solid transparent;
-  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-1) var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text-2);
+  text-decoration: none;
+  font-size: var(--text-body);
+  border-radius: var(--radius-sm);
+  transition: background 0.15s, color 0.15s;
 }
-.menu-item:hover { background: #2f3640; color: #fff; }
-.menu-item.active { background: #2f3640; color: #fff; border-left-color: #667eea; }
+.menu-item:hover { background: var(--color-bg); color: var(--color-text); }
+.menu-item.active {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-weight: 500;
+}
 .menu-item .icon { font-size: 16px; }
-.main { flex: 1; display: flex; flex-direction: column; }
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .topbar {
-  height: 52px; background: #fff; border-bottom: 1px solid #eee;
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 0 24px;
+  height: 52px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 var(--space-6);
 }
-.topbar .current { font-size: 16px; font-weight: 600; color: #333; }
-.user-area { display: flex; gap: 14px; align-items: center; font-size: 13px; color: #666; }
+.topbar .current { font-size: var(--text-body); font-weight: 600; color: var(--color-text); }
+.user-area {
+  display: flex;
+  gap: var(--space-4);
+  align-items: center;
+  font-size: var(--text-caption);
+  color: var(--color-text-2);
+}
 .user-area button {
-  padding: 6px 12px; border: 1px solid #ddd; background: #fff;
-  border-radius: 4px; cursor: pointer; font-size: 12px;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--text-caption);
+  color: var(--color-text);
+  transition: background 0.15s;
 }
-.user-area button:hover { background: #f5f5f5; }
-.content-area { flex: 1; padding: 20px 24px; overflow-y: auto; }
+.user-area button:hover { background: var(--color-bg); }
+.content-area { flex: 1; padding: var(--space-6); overflow-y: auto; }
+
+/* 移动端：侧边栏收起为顶部横条 */
+@media (max-width: 768px) {
+  .admin-layout { flex-direction: column; }
+  .sidebar { width: 100%; flex-direction: row; align-items: center; }
+  .sidebar-header { border-bottom: none; border-right: 1px solid var(--color-border); }
+  .menu { display: flex; padding: 0 var(--space-2); }
+  .menu-item { margin: 0; }
+  .menu-item.active { border-radius: 0; border-bottom: 2px solid var(--color-primary); }
+}
 </style>

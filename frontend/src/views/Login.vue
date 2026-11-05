@@ -54,131 +54,147 @@ function switchMode() {
 
 <template>
   <div class="login-page">
-    <div class="login-card">
-      <h1>景区导览 AI 数字人</h1>
-      <h2>{{ mode === 'login' ? '登录' : '注册' }}</h2>
+    <div class="login-wrap">
+      <div class="brand">
+        <div class="brand-name">西湖文化 AI 导览</div>
+        <div class="brand-sub">LLM + RAG · 智能导览系统</div>
+      </div>
 
-      <form @submit.prevent="handleSubmit" class="login-form">
-        <label>
-          <span>用户名</span>
-          <input v-model="username" type="text" placeholder="admin" autocomplete="username" />
-        </label>
+      <div class="login-card">
+        <h2 class="login-title">{{ mode === 'login' ? '登录' : '注册' }}</h2>
 
-        <label>
-          <span>密码</span>
-          <input v-model="password" type="password" placeholder="至少 6 位" autocomplete="current-password" />
-        </label>
+        <form @submit.prevent="handleSubmit" class="login-form">
+          <div class="form-row">
+            <label class="label" for="login-username">用户名</label>
+            <input id="login-username" v-model="username" class="input" type="text" placeholder="admin" autocomplete="username" />
+          </div>
 
-        <label v-if="mode === 'register'">
-          <span>昵称（可选）</span>
-          <input v-model="nickname" type="text" placeholder="给自己起个昵称" />
-        </label>
+          <div class="form-row">
+            <label class="label" for="login-password">密码</label>
+            <input id="login-password" v-model="password" class="input" type="password" placeholder="至少 6 位" autocomplete="current-password" />
+          </div>
 
-        <p v-if="errorMsg" class="error">{{ errorMsg }}</p>
+          <div class="form-row" v-if="mode === 'register'">
+            <label class="label" for="login-nickname">昵称（可选）</label>
+            <input id="login-nickname" v-model="nickname" class="input" type="text" placeholder="给自己起个昵称" />
+          </div>
 
-        <button type="submit" :disabled="loading" class="submit-btn">
-          {{ loading ? '处理中...' : (mode === 'login' ? '登录' : '注册并登录') }}
+          <p v-if="errorMsg" class="error-bar form-error">{{ errorMsg }}</p>
+
+          <button type="submit" :disabled="loading" class="btn btn-primary submit-btn">
+            {{ loading ? '处理中...' : (mode === 'login' ? '登录' : '注册并登录') }}
+          </button>
+        </form>
+
+        <button type="button" class="switch-btn" @click="switchMode">
+          {{ mode === 'login' ? '没有账号？去注册' : '已有账号？去登录' }}
         </button>
-      </form>
 
-      <button type="button" class="switch-btn" @click="switchMode">
-        {{ mode === 'login' ? '没有账号？去注册' : '已有账号？去登录' }}
-      </button>
-
-      <p v-if="mode === 'login'" class="hint">默认管理员：admin / admin123</p>
+        <p v-if="mode === 'login'" class="hint">默认管理员：<code>admin / admin123</code></p>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+/* 页面根节点自行覆盖脚手架深色底，不动全局 style.css */
 .login-page {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 20px;
+  padding: var(--space-4);
+  background:
+    radial-gradient(600px 320px at 50% -10%, var(--color-primary-soft), transparent 70%),
+    var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
 }
+
+.login-wrap {
+  width: min(400px, 100%);
+}
+
+/* 品牌区：宋体标题，青绿记忆点 */
+.brand {
+  text-align: center;
+  margin-bottom: var(--space-6);
+}
+.brand-name {
+  font-family: var(--font-serif);
+  font-size: var(--text-display);
+  font-weight: 600;
+  color: var(--color-primary);
+  letter-spacing: 0.05em;
+}
+.brand-sub {
+  margin-top: var(--space-1);
+  font-size: var(--text-meta);
+  color: var(--color-text-2);
+}
+
+/* 登录卡片：浮层面板，允许 shadow-lg */
 .login-card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 40px 36px;
-  width: 100%;
-  max-width: 400px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-8);
 }
-.login-card h1 {
-  font-size: 16px;
-  color: #888;
-  margin: 0 0 4px 0;
-  text-align: center;
+
+.login-title {
+  margin: 0 0 var(--space-6);
+  font-family: var(--font-serif);
+  font-size: var(--text-title);
+  font-weight: 600;
+  color: var(--color-text);
 }
-.login-card h2 {
-  font-size: 24px;
-  margin: 0 0 24px 0;
-  text-align: center;
-  color: #333;
+
+.login-form .form-row {
+  margin-bottom: var(--space-4);
 }
-.login-form label {
-  display: block;
-  margin-bottom: 14px;
+
+.form-error {
+  margin: 0 0 var(--space-4);
 }
-.login-form span {
-  display: block;
-  font-size: 13px;
-  color: #555;
-  margin-bottom: 6px;
-}
-.login-form input {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 14px;
-  box-sizing: border-box;
-  transition: border-color 0.2s;
-}
-.login-form input:focus {
-  outline: none;
-  border-color: #667eea;
-}
-.error {
-  color: #d33;
-  font-size: 13px;
-  margin: 8px 0;
-  background: #fff0f0;
-  padding: 6px 10px;
-  border-radius: 4px;
-}
+
 .submit-btn {
   width: 100%;
-  padding: 12px;
-  background: #667eea;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 15px;
-  cursor: pointer;
-  margin-top: 8px;
-  transition: background 0.2s;
+  height: 40px;
+  font-size: var(--text-body);
 }
-.submit-btn:hover:not(:disabled) { background: #5568d3; }
-.submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
 .switch-btn {
   display: block;
   width: 100%;
-  margin-top: 14px;
+  margin-top: var(--space-4);
   background: none;
   border: none;
-  color: #667eea;
-  font-size: 13px;
+  font-size: var(--text-caption);
+  color: var(--color-primary);
   cursor: pointer;
+  font-family: var(--font-sans);
 }
-.switch-btn:hover { text-decoration: underline; }
+.switch-btn:hover {
+  text-decoration: underline;
+}
+
 .hint {
   text-align: center;
-  font-size: 12px;
-  color: #aaa;
-  margin-top: 18px;
+  font-size: var(--text-meta);
+  color: var(--color-text-2);
+  margin: var(--space-4) 0 0;
+}
+.hint code {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  padding: 1px var(--space-2);
+  border-radius: var(--space-1);
+}
+
+@media (max-width: 640px) {
+  .login-card {
+    padding: var(--space-6);
+  }
 }
 </style>

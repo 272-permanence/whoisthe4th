@@ -1,0 +1,269 @@
+/**
+ * @file 设计系统 Token + 通用组件类（方向 B：只此青绿）
+ * @author 第八组（成员C）
+ * @date 2026-11-05
+ * @description 全站统一设计规范：色彩 / 字体 / 间距 / 圆角 / 阴影 token，
+ *              以及按钮、输入框、卡片、表格、弹窗等通用类。
+ *              原则：只新增变量与类，不覆盖全局 reset；浅色底由各页面根节点自行设置。
+ */
+
+:root {
+  /* 色彩：青瓷绿主色（全站唯一强调色，视觉权重 <=10%） */
+  --color-primary: #0f766e;
+  --color-primary-hover: #115e59;
+  --color-primary-soft: #eaf4f0;
+
+  /* 中性色（带微量青绿倾向，不脏不闷） */
+  --color-bg: #f6f8f7;
+  --color-surface: #ffffff;
+  --color-border: #e3e8e6;
+  --color-text: #1a2420;
+  --color-text-2: #55605b;
+  --color-text-3: #6b7470;
+
+  /* 语义色（只表达状态，不做装饰） */
+  --color-success: #059669;
+  --color-warning: #b45309;
+  --color-danger: #dc2626;
+  --color-danger-soft: #fbefed;
+
+  /* 字体 */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', system-ui, sans-serif;
+  --font-serif: 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'SimSun', serif;
+
+  /* 字号层级（5 级，固定 rem） */
+  --text-display: 1.5rem;
+  --text-title: 1.125rem;
+  --text-body: 0.875rem;
+  --text-caption: 0.8125rem;
+  --text-meta: 0.75rem;
+
+  /* 间距（4pt 基线） */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  /* 圆角（只三档） */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-full: 999px;
+
+  /* 阴影（卡片默认不用阴影，只有浮层用） */
+  --shadow-sm: 0 1px 2px rgba(26, 36, 32, 0.05);
+  --shadow-md: 0 4px 12px rgba(26, 36, 32, 0.08);
+  --shadow-lg: 0 8px 24px rgba(26, 36, 32, 0.12);
+
+  /* z-index 语义阶梯 */
+  --z-dropdown: 10;
+  --z-sticky: 20;
+  --z-modal-mask: 40;
+  --z-modal: 50;
+  --z-toast: 60;
+}
+
+/* ============ 通用组件类 ============ */
+
+/* 按钮：主按钮每屏唯一实心；危险操作默认文字按钮 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 36px;
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-caption);
+  font-weight: 500;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.18);
+}
+.btn-primary {
+  background: var(--color-primary);
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+.btn-secondary {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+.btn-secondary:hover:not(:disabled) {
+  background: var(--color-bg);
+}
+.btn-danger {
+  background: var(--color-danger);
+  color: #fff;
+}
+.btn-danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+.btn-text {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  height: auto;
+  padding: var(--space-1) var(--space-2);
+}
+.btn-text:hover:not(:disabled) {
+  background: var(--color-primary-soft);
+}
+.btn-danger-text {
+  background: none;
+  border: none;
+  color: var(--color-danger);
+  height: auto;
+  padding: var(--space-1) var(--space-2);
+}
+.btn-danger-text:hover:not(:disabled) {
+  background: var(--color-danger-soft);
+}
+
+/* 表单：40px 输入框 + 外发光 focus */
+.label {
+  display: block;
+  font-size: var(--text-caption);
+  font-weight: 500;
+  color: var(--color-text-2);
+  margin-bottom: var(--space-2);
+}
+.input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 40px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-body);
+  font-family: var(--font-sans);
+  color: var(--color-text);
+  background: var(--color-surface);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.input::placeholder {
+  color: var(--color-text-3);
+}
+.input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
+}
+textarea.input {
+  min-height: 0;
+  resize: vertical;
+}
+
+/* 卡片：0 阴影 + 1px 边框 */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-6);
+}
+
+/* 表格：表头弱化、无斑马纹、只留 hover；容器横向滚动兜底移动端 */
+.table-wrap {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-body);
+  color: var(--color-text);
+}
+.table th {
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  font-size: var(--text-caption);
+  font-weight: 500;
+  color: var(--color-text-2);
+  background: var(--color-bg);
+  white-space: nowrap;
+}
+.table td {
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+.table tbody tr {
+  transition: background 0.12s;
+}
+.table tbody tr:hover {
+  background: #f7faf8;
+}
+
+/* 弹窗：唯一允许使用 shadow-lg 的场景 */
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 24, 20, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  z-index: var(--z-modal-mask);
+}
+.modal {
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-6);
+  width: min(480px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  z-index: var(--z-modal);
+}
+.modal-title {
+  margin: 0 0 var(--space-6);
+  font-family: var(--font-serif);
+  font-size: var(--text-title);
+  font-weight: 600;
+  color: var(--color-text);
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+
+/* 反馈条 / 空状态 */
+.error-bar {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  border: 1px solid #f3d4d0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-body);
+}
+.empty-state {
+  padding: var(--space-12) var(--space-6);
+  text-align: center;
+  color: var(--color-text-2);
+  font-size: var(--text-body);
+}
+
+/* 工具：表格数字等宽对齐 */
+.nums {
+  font-variant-numeric: tabular-nums;
+}
