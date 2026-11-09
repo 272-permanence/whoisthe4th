@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { loginApi, registerApi } from '../api/auth';
+import { loginApi, registerApi, getCaptchaApi } from '../api/auth';
 
 const router = useRouter();
 const route = useRoute();
@@ -12,9 +12,38 @@ const password = ref('');
 const nickname = ref('');
 const loading = ref(false);
 const errorMsg = ref('');
+const successMsg = ref('');
+
+// 图形验证码
+const captchaId = ref('');
+const captchaCode = ref('');
+const captchaSvg = ref('');
+const captchaLoading = ref(false);
+
+/** SVG 转 data URL 供 <img> 渲染 */
+const captchaSrc = computed(() =>
+  captchaSvg.value ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(captchaSvg.value)}` : ''
+);
+
+/** 拉取/刷新验证码 */
+async function loadCaptcha() {
+  captchaLoading.value = true;
+  try {
+    const data = await getCaptchaApi();
+    captchaId.value = data.captchaId;
+    captchaSvg.value = data.svg;
+    captchaCode.value = '';
+  } catch {
+    captchaSvg.value = '';
+    errorMsg.value = '验证码加载失败，请点击重试';
+  } finally {
+    captchaLoading.value = false;
+  }
+}
 
 async function handleSubmit() {
   errorMsg.value = '';
+  successMsg.value = '';
   if (!username.value.trim() || !password.value.trim()) {
     errorMsg.value = '请填写用户名和密码';
     return;
@@ -23,12 +52,34 @@ async function handleSubmit() {
     errorMsg.value = '密码至少 6 位';
     return;
   }
+  if (!captchaId.value || !captchaCode.value.trim()) {
+    errorMsg.value = '请填写验证码';
+    return;
+  }
   loading.value = true;
   try {
-    const loginResult = mode.value === 'login'
-      ? await loginApi(username.value.trim(), password.value)
-      : (await registerApi(username.value.trim(), password.value, nickname.value.trim() || undefined),
-         await loginApi(username.value.trim(), password.value));
+    if (mode.value === 'register') {
+      await registerApi(
+        username.value.trim(),
+        password.value,
+        nickname.value.trim() || undefined,
+        captchaId.value,
+        captchaCode.value.trim()
+      );
+      // 验证码已消费，注册成功后回到登录态（不再自动登录）
+      mode.value = 'login';
+      password.value = '';
+      successMsg.value = '注册成功，请使用新账号登录';
+      await loadCaptcha();
+      return;
+    }
+
+    const loginResult = await loginApi(
+      username.value.trim(),
+      password.value,
+      captchaId.value,
+      captchaCode.value.trim()
+    );
     // 按 role 跳转：admin 进后台，user 进用户端
     const userRole = loginResult.user.role;
     const redirect = route.query.redirect as string | undefined;
@@ -41,6 +92,8 @@ async function handleSubmit() {
     }
   } catch (err: unknown) {
     errorMsg.value = err instanceof Error ? err.message : '操作失败';
+    // 验证码一次性使用，失败后必须刷新
+    await loadCaptcha();
   } finally {
     loading.value = false;
   }
@@ -49,7 +102,11 @@ async function handleSubmit() {
 function switchMode() {
   mode.value = mode.value === 'login' ? 'register' : 'login';
   errorMsg.value = '';
+  successMsg.value = '';
+  loadCaptcha();
 }
+
+onMounted(loadCaptcha);
 </script>
 
 <template>
@@ -79,10 +136,37 @@ function switchMode() {
             <input id="login-nickname" v-model="nickname" class="input" type="text" placeholder="给自己起个昵称" />
           </div>
 
+          <div class="form-row">
+            <label class="label" for="login-captcha">验证码</label>
+            <div class="captcha-row">
+              <input
+                id="login-captcha"
+                v-model="captchaCode"
+                class="input"
+                type="text"
+                maxlength="4"
+                placeholder="4 位验证码"
+                autocomplete="off"
+              />
+              <img
+                v-if="captchaSrc"
+                class="captcha-img"
+                :src="captchaSrc"
+                alt="验证码"
+                title="点击刷新"
+                @click="loadCaptcha"
+              />
+              <div v-else class="captcha-img captcha-placeholder" @click="loadCaptcha">
+                {{ captchaLoading ? '加载中' : '点击获取' }}
+              </div>
+            </div>
+          </div>
+
           <p v-if="errorMsg" class="error-bar form-error">{{ errorMsg }}</p>
+          <p v-if="successMsg" class="success-bar form-error">{{ successMsg }}</p>
 
           <button type="submit" :disabled="loading" class="btn btn-primary submit-btn">
-            {{ loading ? '处理中...' : (mode === 'login' ? '登录' : '注册并登录') }}
+            {{ loading ? '处理中...' : (mode === 'login' ? '登录' : '注册') }}
           </button>
         </form>
 
@@ -156,6 +240,38 @@ function switchMode() {
 
 .form-error {
   margin: 0 0 var(--space-4);
+}
+
+/* 验证码 */
+.captcha-row {
+  display: flex;
+  gap: var(--space-3);
+  align-items: stretch;
+}
+.captcha-row .input {
+  flex: 1;
+  min-width: 0;
+}
+.captcha-img {
+  flex: 0 0 auto;
+  width: 120px;
+  height: 40px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg);
+  cursor: pointer;
+  object-fit: cover;
+}
+.captcha-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-meta);
+  color: var(--color-text-2);
+}
+
+.success-bar {
+  color: var(--color-primary);
 }
 
 .submit-btn {

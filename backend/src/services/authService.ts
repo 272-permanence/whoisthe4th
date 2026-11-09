@@ -73,6 +73,18 @@ export function getUserById(uid: number): SafeUser | null {
   return user ? toSafeUser(user) : null;
 }
 
+/**
+ * 按用户名查询用户（仅用于登录审计时区分失败原因，不对外暴露）
+ * @param username 用户名
+ */
+export function findUserByUsername(username: string): Pick<SafeUser, 'id' | 'username' | 'status'> | null {
+  const db = getAuthDb();
+  const user = db.prepare('SELECT id, username, status FROM admin_user WHERE username = ?').get(username) as
+    | Pick<UserRecord, 'id' | 'username' | 'status'>
+    | undefined;
+  return user ?? null;
+}
+
 function toSafeUser(u: UserRecord): SafeUser {
   const { password_hash: _omit, ...rest } = u;
   return rest;

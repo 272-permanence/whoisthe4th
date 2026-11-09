@@ -28,12 +28,34 @@ function getToken(): string | null {
   return localStorage.getItem('token');
 }
 
+/** 图形验证码 */
+export interface CaptchaResult {
+  captchaId: string;
+  svg: string;
+  expiresIn: number;
+}
+
+/** 获取图形验证码 */
+export async function getCaptchaApi(): Promise<CaptchaResult> {
+  const res = await fetch(`${AUTH_BASE}/captcha`);
+  const payload = (await res.json()) as ApiResult<CaptchaResult>;
+  if (!res.ok || payload.code !== 0) {
+    throw new Error(payload.message || `HTTP ${res.status}`);
+  }
+  return payload.data;
+}
+
 /** 登录 */
-export async function loginApi(username: string, password: string): Promise<LoginResult> {
+export async function loginApi(
+  username: string,
+  password: string,
+  captchaId: string,
+  captchaCode: string
+): Promise<LoginResult> {
   const res = await fetch(`${AUTH_BASE}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password })
+    body: JSON.stringify({ username, password, captchaId, captchaCode })
   });
   const payload = (await res.json()) as ApiResult<LoginResult>;
   if (!res.ok || payload.code !== 0) {
@@ -49,12 +71,14 @@ export async function loginApi(username: string, password: string): Promise<Logi
 export async function registerApi(
   username: string,
   password: string,
-  nickname?: string
+  nickname: string | undefined,
+  captchaId: string,
+  captchaCode: string
 ): Promise<{ id: number }> {
   const res = await fetch(`${AUTH_BASE}/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password, nickname, role: 'user' })
+    body: JSON.stringify({ username, password, nickname, role: 'user', captchaId, captchaCode })
   });
   const payload = (await res.json()) as ApiResult<{ id: number }>;
   if (!res.ok || payload.code !== 0) {

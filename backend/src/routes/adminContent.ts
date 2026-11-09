@@ -33,8 +33,8 @@ router.get('/', (req, res) => {
 /** POST / - 新建 */
 router.post('/', (req: Request, res: Response) => {
   const { type, title, subtitle, content, image_url, extra_json, sort_order, published } = req.body ?? {};
-  if (!type || !title) throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM, 'type / title 必填');
-  if (!TYPES.includes(type as ContentType)) throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM, '非法的内容类型');
+  if (!type || !title) throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM.code, 'type / title 必填');
+  if (!TYPES.includes(type as ContentType)) throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM.code, '非法的内容类型');
   const db = getAuthDb();
   const result = db.prepare(`
     INSERT INTO content (type, title, subtitle, content, image_url, extra_json, sort_order, published)
@@ -56,7 +56,7 @@ router.post('/', (req: Request, res: Response) => {
 router.put('/:id', (req, res) => {
   const db = getAuthDb();
   const existing = db.prepare('SELECT id FROM content WHERE id = ?').get(req.params.id);
-  if (!existing) throw new HttpError(404, ErrorCodeEnum.INVALID_PARAM, '内容不存在');
+  if (!existing) throw new HttpError(404, ErrorCodeEnum.INVALID_PARAM.code, '内容不存在');
   const fields = ['type', 'title', 'subtitle', 'content', 'image_url', 'extra_json', 'sort_order', 'published'];
   const sets: string[] = [];
   const vals: unknown[] = [];
@@ -81,7 +81,7 @@ router.put('/:id', (req, res) => {
 router.delete('/:id', (req, res) => {
   const db = getAuthDb();
   const r = db.prepare('UPDATE content SET published = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(req.params.id);
-  if (r.changes === 0) throw new HttpError(404, ErrorCodeEnum.INVALID_PARAM, '内容不存在');
+  if (r.changes === 0) throw new HttpError(404, ErrorCodeEnum.INVALID_PARAM.code, '内容不存在');
   res.json({ code: 0, message: 'ok', data: null });
 });
 
@@ -89,7 +89,7 @@ router.delete('/:id', (req, res) => {
 router.post('/:id/publish', (req, res) => {
   const db = getAuthDb();
   const existing = db.prepare('SELECT published FROM content WHERE id = ?').get(req.params.id) as { published: number } | undefined;
-  if (!existing) throw new HttpError(404, ErrorCodeEnum.INVALID_PARAM, '内容不存在');
+  if (!existing) throw new HttpError(404, ErrorCodeEnum.INVALID_PARAM.code, '内容不存在');
   const next = existing.published ? 0 : 1;
   db.prepare('UPDATE content SET published = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(next, req.params.id);
   res.json({ code: 0, message: 'ok', data: { id: Number(req.params.id), published: !!next } });

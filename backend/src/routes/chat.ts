@@ -59,7 +59,7 @@ router.post('/stream', async (req: Request, res: Response) => {
       { role: 'user', content: message },
     ];
   } else {
-    res.status(400).json({ error: '请提供 message (string) 或 messages (array) 参数', code: ErrorCodeEnum.INVALID_PARAM });
+    res.status(400).json({ error: '请提供 message (string) 或 messages (array) 参数', code: ErrorCodeEnum.INVALID_PARAM.code });
     log.WARN('参数校验失败，未提供 message 或 messages');
     return;
   }
@@ -126,7 +126,7 @@ router.post('/stream', async (req: Request, res: Response) => {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log.ERROR(`SSE ERROR: ${msg}`);
-    sendSseEvent(res, SseEventEnum.ERROR, { message: msg, code: ErrorCodeEnum.INTERNAL_ERROR });
+    sendSseEvent(res, SseEventEnum.ERROR, { message: msg, code: ErrorCodeEnum.INTERNAL_ERROR.code });
     sendSseEvent(res, SseEventEnum.DONE, {});
   } finally {
     stopHeartbeat();

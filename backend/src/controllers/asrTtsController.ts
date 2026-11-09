@@ -56,11 +56,11 @@ function parseLastSeq(raw: unknown): number {
 export async function handleTranscribe(req: Request, res: Response): Promise<void> {
   const file = req.file;
   if (file === undefined) {
-    res.status(400).json({ code: ErrorCodeEnum.INVALID_AUDIO, message: '缺少 audio 音频文件字段' });
+    res.status(400).json({ code: ErrorCodeEnum.INVALID_AUDIO.code, message: '缺少 audio 音频文件字段' });
     return;
   }
   if (!ALLOWED_AUDIO_MIME_TYPES.has(file.mimetype)) {
-    res.status(400).json({ code: ErrorCodeEnum.INVALID_AUDIO, message: `不支持的音频类型: ${file.mimetype}` });
+    res.status(400).json({ code: ErrorCodeEnum.INVALID_AUDIO.code, message: `不支持的音频类型: ${file.mimetype}` });
     return;
   }
 
@@ -116,7 +116,7 @@ export async function handleTranscribe(req: Request, res: Response): Promise<voi
     }
     logger.ERROR(`语音识别失败: ${error instanceof Error ? error.message : error}`);
     res.status(500).json({
-      code: ErrorCodeEnum.ASR_FAILED,
+      code: ErrorCodeEnum.ASR_FAILED.code,
       message: error instanceof Error ? error.message : '语音识别失败'
     });
   }
@@ -130,12 +130,12 @@ export async function handleTranscribe(req: Request, res: Response): Promise<voi
 export async function handleTtsStream(req: Request, res: Response): Promise<void> {
   const text = typeof req.query.text === 'string' ? req.query.text.trim() : '';
   if (text === '') {
-    res.status(400).json({ code: ErrorCodeEnum.INVALID_PARAM, message: 'text 参数不能为空' });
+    res.status(400).json({ code: ErrorCodeEnum.INVALID_PARAM.code, message: 'text 参数不能为空' });
     return;
   }
   if (text.length > MAX_TTS_TEXT_LENGTH) {
     res.status(400).json({
-      code: ErrorCodeEnum.INVALID_PARAM,
+      code: ErrorCodeEnum.INVALID_PARAM.code,
       message: `text 长度不能超过 ${MAX_TTS_TEXT_LENGTH} 个字符`
     });
     return;
@@ -187,7 +187,7 @@ export async function handleTtsStream(req: Request, res: Response): Promise<void
     }
     console.error('[tts] 语音合成失败: %s', error);
     sendSseEvent(res, SseEventEnum.ERROR, {
-      code: ErrorCodeEnum.TTS_FAILED,
+      code: ErrorCodeEnum.TTS_FAILED.code,
       message: error instanceof Error ? error.message : '语音合成失败'
     });
   } finally {

@@ -34,14 +34,14 @@ router.get('/', (_req, res) => {
 router.get('/:id', (req, res) => {
   const db = getAuthDb();
   const row = db.prepare('SELECT * FROM product WHERE id = ?').get(req.params.id) as ProductRow | undefined;
-  if (!row) throw new HttpError(404, ErrorCodeEnum.INVALID_PARAM, '商品不存在');
+  if (!row) throw new HttpError(404, ErrorCodeEnum.INVALID_PARAM.code, '商品不存在');
   res.json({ code: 0, message: 'ok', data: row });
 });
 
 /** POST /api/v1/products - 新建（需 admin） */
 router.post('/', requireAuth, requireRole('admin'), (req: Request, res: Response) => {
   const { name, description, price, stock, category, image_url } = req.body ?? {};
-  if (!name) throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM, 'name 必填');
+  if (!name) throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM.code, 'name 必填');
   const db = getAuthDb();
   const result = db
     .prepare(
@@ -64,7 +64,7 @@ router.post('/', requireAuth, requireRole('admin'), (req: Request, res: Response
 router.put('/:id', requireAuth, requireRole('admin'), (req, res) => {
   const db = getAuthDb();
   const existing = db.prepare('SELECT id FROM product WHERE id = ?').get(req.params.id);
-  if (!existing) throw new HttpError(404, ErrorCodeEnum.INVALID_PARAM, '商品不存在');
+  if (!existing) throw new HttpError(404, ErrorCodeEnum.INVALID_PARAM.code, '商品不存在');
 
   const { name, description, price, stock, category, image_url } = req.body ?? {};
   db.prepare(
@@ -94,7 +94,7 @@ router.put('/:id', requireAuth, requireRole('admin'), (req, res) => {
 router.delete('/:id', requireAuth, requireRole('admin'), (req, res) => {
   const db = getAuthDb();
   const result = db.prepare('DELETE FROM product WHERE id = ?').run(req.params.id);
-  if (result.changes === 0) throw new HttpError(404, ErrorCodeEnum.INVALID_PARAM, '商品不存在');
+  if (result.changes === 0) throw new HttpError(404, ErrorCodeEnum.INVALID_PARAM.code, '商品不存在');
   res.json({ code: 0, message: 'ok', data: null });
 });
 

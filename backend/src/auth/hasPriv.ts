@@ -40,13 +40,13 @@ export function hasPriv(module: string, method: string): RequestHandler {
     try {
       const account = resolveAccount(req);
       if (!account) {
-        throw new HttpError(401, ErrorCodeEnum.UNAUTHORIZED, '缺少 x-account 请求头，请先登录');
+        throw new HttpError(401, ErrorCodeEnum.UNAUTHORIZED.code, '缺少 x-account 请求头，请先登录');
       }
       const ctx = await authorize(account);
       // 对应禅道：$app->user->admin 短路 / commonModel::hasPriv 查内存权限表
       if (!checkPriv(ctx, module, method)) {
         log.WARN(`越权拦截 account=${account} 请求 ${module}:${method}`);
-        throw new HttpError(403, ErrorCodeEnum.FORBIDDEN, `无权限执行 ${module}:${method}`);
+        throw new HttpError(403, ErrorCodeEnum.FORBIDDEN.code, `无权限执行 ${module}:${method}`);
       }
       next();
     } catch (err) {

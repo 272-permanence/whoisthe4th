@@ -48,7 +48,7 @@ const upload = multer({
   limits: { fileSize: MAX_SIZE },
   fileFilter: (_req, file, cb) => {
     if (!ALLOWED_MIME.has(file.mimetype)) {
-      cb(new HttpError(400, ErrorCodeEnum.INVALID_PARAM, `不支持的图片类型: ${file.mimetype}`));
+      cb(new HttpError(400, ErrorCodeEnum.INVALID_PARAM.code, `不支持的图片类型: ${file.mimetype}`));
       return;
     }
     cb(null, true);
@@ -61,7 +61,7 @@ router.use(requireAuth, requireRole('admin'));
 /** POST / - 上传图片，字段名 image，返回 { url } */
 router.post('/', upload.single('image'), (req: Request, res: Response) => {
   if (!req.file) {
-    throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM, '未收到图片文件（字段名应为 image）');
+    throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM.code, '未收到图片文件（字段名应为 image）');
   }
   // 返回相对 URL，前端拼接 baseURL 即可访问
   res.status(201).json({
