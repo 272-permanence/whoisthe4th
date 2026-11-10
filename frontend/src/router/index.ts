@@ -68,6 +68,13 @@ const routes = [
     component: () => import('../views/mobile/GuideDetail.vue'),
     meta: { title: '路线详情' },
   },
+  // PC 端独立入口：多模态语音交互主页面（成员A · 含 Live2D + Canvas 数字人 + 完整控制台）
+  {
+    path: '/interact',
+    name: 'pc-interaction',
+    component: () => import('../views/InteractionView.vue'),
+    meta: { title: '语音交互（PC）' },
+  },
   {
     path: '/qa',
     name: 'qa-panel',
