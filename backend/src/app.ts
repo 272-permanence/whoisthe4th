@@ -9,15 +9,19 @@ import cors from 'cors';
 import multer from 'multer';
 import { config } from './config.js';
 import chatRouter from './routes/chat.js';
-import analyticsRouter from './analytics/routes.js';
+import analyticsRouter, { cleanupAnalytics, startAnalyticsPush } from './analytics/routes.js';
 import asrTtsRouter from './routes/asrTts.js';
 import kbRouter from './routes/kb.js';
 import lostFoundRouter from './routes/lostFound.js';
 import homeRouter from './routes/home.js';
 import guideRouter from './routes/guide.js';
 import poiRouter from './routes/poi.js';
-import { initTables } from './analytics/db.js';
+import { initTables, closeDb } from './analytics/db.js';
 import { initTables as initLostFoundTables } from './lostFound/db.js';
+import { initTables as initLogTables } from './services/logService.js';
+import { startLogQueueConsumer, stopLogQueueConsumer } from './services/logQueue.js';
+import { initRedis, closeRedis } from './common/redis.js';
+import logsRouter from './routes/logs.js';
 import { ErrorCodeEnum } from './common/errorCodes.js';
 import { HttpError } from './common/httpError.js';
 import { createLogger } from './common/logger.js';
@@ -42,6 +46,7 @@ app.use('/api/v1/lost-found', lostFoundRouter);
 app.use('/api/v1/home', homeRouter);
 app.use('/api/v1/routes', guideRouter);
 app.use('/api/v1/poi', poiRouter);
+app.use('/api/v1/logs', logsRouter);
 
 // 健康检查接口
 app.get('/health', (_req, res) => {
@@ -64,11 +69,20 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json({ code: ErrorCodeEnum.INTERNAL_ERROR, message: '服务器内部错误' });
 });
 
-// 启动服务（先初始化数据表，再监听端口）
+// 启动服务（先初始化数据表与消息队列，再监听端口）
 async function bootstrap(): Promise<void> {
   try {
     await initTables();
     await initLostFoundTables();
+    await initLogTables();
+
+    // Redis 消息队列：连不上不影响启动，日志改为直写、大屏退回本机推送
+    const redisReady = await initRedis();
+    if (redisReady) {
+      await startLogQueueConsumer();
+    }
+    await startAnalyticsPush();
+
     app.listen(config.port, () => {
       log.INFO(`后端服务已启动: http://localhost:${config.port}`);
       log.INFO(`允许跨域的前端地址: ${config.frontendUrl}`);
@@ -79,5 +93,22 @@ async function bootstrap(): Promise<void> {
     process.exit(1);
   }
 }
+
+// 优雅关闭：先停消费者与定时器，再断开 Redis / MySQL
+async function shutdown(signal: string): Promise<void> {
+  log.INFO(`收到 ${signal}，正在关闭服务...`);
+  await stopLogQueueConsumer();
+  await cleanupAnalytics();
+  await closeRedis();
+  await closeDb();
+  process.exit(0);
+}
+
+process.once('SIGINT', () => {
+  void shutdown('SIGINT');
+});
+process.once('SIGTERM', () => {
+  void shutdown('SIGTERM');
+});
 
 bootstrap();
