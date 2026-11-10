@@ -1,14 +1,37 @@
 /**
  * @file 公共层：API 请求封装
- * @description 封装 fetch，自动拼 baseURL、统一错误处理、支持 AbortController。
- *              自动注入 JWT Authorization header（从 localStorage 读取 token）。
- *              收到 401 时自动清 token 并跳转 /login。
+ * @description 封装 fetch，自动拼 baseURL、统一错误处理、支持 AbortController、
+ *              自动注入 JWT Authorization header + 自动注入/提取 X-Trace-Id 请求头，
+ *              实现全链路 traceId 传递。收到 401 时自动清 token 并跳转 /login。
  *              所有后端 HTTP 请求（REST 类型）应从这里出发，避免散落的裸 fetch。
  *              EventSource 不在此封装（它只能 GET，且 URL 拼装逻辑不同）。
- * @author 第八组（成员A）
+ * @author 第八组（成员A / 成员D traceId 改造）
  * @date 2026-10-20
  */
 import { API_BASE_URL, INTERACTION_API_PREFIX } from '../constants/apiConstants';
+
+/** traceId 在 localStorage 中的键名 */
+const TRACE_ID_KEY = 'traceId';
+
+/**
+ * 生成一个 traceId：时间戳 + 8位随机串
+ */
+function generateTraceId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * 获取当前 traceId：localStorage 中没有则生成一个并写入
+ * 供埋点工具等外部模块调用
+ */
+export function getTraceId(): string {
+  let traceId = localStorage.getItem(TRACE_ID_KEY);
+  if (!traceId) {
+    traceId = generateTraceId();
+    localStorage.setItem(TRACE_ID_KEY, traceId);
+  }
+  return traceId;
+}
 
 /** 后端统一响应体结构（全组必须遵守） */
 export interface ApiEnvelope<T = unknown> {
@@ -44,7 +67,7 @@ function forceLogout(): void {
 }
 
 /**
- * 统一 API 请求：自动拼 URL、注入 JWT、解析 envelope、处理 401 自动登出
+ * 统一 API 请求：自动拼 URL、注入 JWT、注入 traceId、解析 envelope、处理 401 自动登出
  * @param path 相对路径，如 '/asr'、'/stats'
  * @param options 请求选项
  * @returns 解包后的 envelope.data
@@ -55,8 +78,11 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
   const prefix = options.apiPrefix ?? INTERACTION_API_PREFIX;
   const fullUrl = `${baseUrl}${prefix}${path}`;
 
-  // 合并 headers：skipAuth 为 true 时不自动加 token
-  const autoHeaders: Record<string, string> = { Accept: 'application/json' };
+  // 合并 headers：skipAuth 为 true 时不自动加 token；自动注入 traceId
+  const autoHeaders: Record<string, string> = {
+    Accept: 'application/json',
+    'X-Trace-Id': getTraceId(),
+  };
   if (!options.skipAuth) {
     const token = getToken();
     if (token) autoHeaders['Authorization'] = `Bearer ${token}`;
@@ -69,6 +95,12 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
       ...(options.headers ?? {})
     }
   });
+
+  // 响应时：从后端 X-Trace-Id 响应头提取 traceId 并存入 localStorage（实现全链路传递）
+  const respTraceId = response.headers.get('X-Trace-Id');
+  if (respTraceId) {
+    localStorage.setItem(TRACE_ID_KEY, respTraceId);
+  }
 
   // 401 兜底：清 token 跳 /login
   if (response.status === 401) {

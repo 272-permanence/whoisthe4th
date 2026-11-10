@@ -34,6 +34,8 @@ const DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/ch
 const DEFAULT_EMBEDDING_MODEL = 'bge-m3';
 const DEFAULT_DB_MASTER_PORT = 3307;
 const DEFAULT_DB_SLAVE_PORT = 3307;
+/** Redis 消息队列默认地址（Memurai / Redis 7 兼容） */
+const DEFAULT_REDIS_URL = 'redis://127.0.0.1:6379';
 
 export type AsrProvider = 'mock' | 'whisper-api' | 'whisper-cli';
 export type TtsProvider = 'edge' | 'mock';
@@ -118,5 +120,24 @@ export const config = {
       host: readText('DB_SLAVE_HOST', '127.0.0.1'),
       port: readInt('DB_SLAVE_PORT', DEFAULT_DB_SLAVE_PORT)
     }
+  },
+
+  /**
+   * Redis 消息队列（成员D · 数据洞察模块牵头）
+   * - 日志：业务侧 XADD 到 Stream，独立消费者组批量落 MySQL
+   * - 大屏：统计结果走 Pub/Sub 广播到各节点，解决 Tomcat 多节点 SSE 无法互通的问题
+   * REDIS_ENABLED=false 或 Redis 连不上时自动降级：日志直写 MySQL、大屏仅本机推送
+   */
+  redis: {
+    enabled: readText('REDIS_ENABLED', 'true') !== 'false',
+    url: readText('REDIS_URL', DEFAULT_REDIS_URL),
+    /** 日志消息的 Stream 键名 */
+    logStream: readText('REDIS_LOG_STREAM', 'scenic:log:stream'),
+    /** 日志消费者组名 */
+    logGroup: readText('REDIS_LOG_GROUP', 'log-writer'),
+    /** 大屏统计的 Pub/Sub 频道名 */
+    statsChannel: readText('REDIS_STATS_CHANNEL', 'scenic:stats'),
+    /** 大屏定时推送的分布式锁键名（只让一个节点算统计并发布） */
+    statsLockKey: readText('REDIS_STATS_LOCK_KEY', 'scenic:stats:pusher')
   }
 } as const;

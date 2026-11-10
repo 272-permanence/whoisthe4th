@@ -2,7 +2,7 @@
  * @file 应用入口：中间件注册、路由挂载、统一错误处理
  * @author 第八组
  * @date 2026-10-15
- * @description 景区导览 AI 数字人后端服务入口（合并 B/C/D 全部路由）
+ * @description 景区导览 AI 数字人后端服务入口（合并 A/B/C/D 全部路由 + 日志系统 + Redis）
  */
 import express, { type NextFunction, type Request, type Response } from 'express';
 import cors from 'cors';
@@ -12,13 +12,15 @@ import { ErrorCodeEnum } from './constants/errorCodes.js';
 import { HttpError } from './utils/httpError.js';
 import { createLogger } from './common/logger.js';
 
-// 成员B：问答 + 导航（高德路径规划代理，B 独有）
+// ========== 路由导入 ==========
+// 成员A：语音交互 + 数据分析
 import chatRouter from './routes/chat.js';
-import navigationRouter from './routes/navigation.js';
-
-// 成员A：语音交互
-import analyticsRouter from './analytics/routes.js';
+import analyticsRouter, { cleanupAnalytics, startAnalyticsPush } from './analytics/routes.js';
 import asrTtsRouter from './routes/asrTts.js';
+import ttsRouter from './routes/tts.js';
+
+// 成员B：高德路径规划代理（导航页用）
+import navigationRouter from './routes/navigation.js';
 
 // 成员C：知识库 + 鉴权 + 内容管理 + 图片上传
 import kbRouter from './routes/kb.js';
@@ -29,19 +31,35 @@ import adminContentRouter from './routes/adminContent.js';
 import userRouter from './routes/user.js';
 import uploadRouter, { UPLOAD_DIR } from './routes/upload.js';
 
-// 成员D：移动端模块（首页 / 游玩攻略 / 失物招领 / POI CRUD）
+// 成员D：移动端模块 + 日志审计
 import lostFoundRouter from './routes/lostFound.js';
 import homeRouter from './routes/home.js';
 import guideRouter from './routes/guide.js';
-import dPoiRouter from './routes/poi.js';
-import { initAnalyticsTables } from './analytics/db.js';
+import poiRouter from './routes/poi.js';
+import logsRouter from './routes/logs.js';
+
+// ========== 初始化函数 & 中间件 ==========
+import { initTables as initAnalyticsTables, closeDb } from './analytics/db.js';
+import { initTables as initLostFoundTables } from './lostFound/db.js';
+import { initTables as initLogTables } from './services/logService.js';
+import { startLogQueueConsumer, stopLogQueueConsumer } from './services/logQueue.js';
+import { initRedis, closeRedis } from './common/redis.js';
+import { traceIdMiddleware } from './middleware/traceId.js';
 
 const log = createLogger('app');
 const app = express();
 
-// ========== 中间件 ==========
-app.use(cors({ origin: config.frontendUrl, credentials: true }));
+// ========== CORS：暴露 X-Trace-Id 响应头，前端才能读到 ==========
+app.use(cors({
+  origin: config.frontendUrl,
+  credentials: true,
+  exposedHeaders: ['X-Trace-Id']
+}));
+
 app.use(express.json());
+
+// 全链路追踪：确定 traceId 并写入 req.traceId + 响应头（放在所有中间件与业务路由之前）
+app.use(traceIdMiddleware);
 
 // ========== 静态托管：用户端可直接访问后台上传的图片 ==========
 app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d' }));
@@ -51,6 +69,7 @@ app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d' }));
 app.use('/api/v1/chat', chatRouter);
 app.use('/api/v1/analytics', analyticsRouter);
 app.use('/api/v1/asr-tts', asrTtsRouter);
+app.use('/api/v1/tts', ttsRouter);
 
 // 成员B：高德路径规划代理（导航页用，B 独有路由）
 app.use('/api/v1/navigation', navigationRouter);
@@ -68,7 +87,8 @@ app.use('/api/v1/admin/upload', uploadRouter);
 app.use('/api/v1/lost-found', lostFoundRouter);
 app.use('/api/v1/home', homeRouter);
 app.use('/api/v1/routes', guideRouter);
-app.use('/api/v1/poi', dPoiRouter);
+app.use('/api/v1/poi', poiRouter);
+app.use('/api/v1/logs', logsRouter);
 
 // ========== 健康检查 ==========
 app.get('/health', (_req, res) => {
@@ -91,17 +111,60 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 // ========== 启动服务 ==========
+// 数据表初始化失败不阻断，便于无 MySQL 环境下独立开发；Redis 连不上则自动降级
 async function bootstrap(): Promise<void> {
   try {
-    await initAnalyticsTables();
+    try {
+      await initAnalyticsTables();
+    } catch (e) {
+      log.WARN(`analytics 数据表初始化跳过（MySQL 不可用）: ${String(e)}`);
+    }
+    try {
+      await initLostFoundTables();
+    } catch (e) {
+      log.WARN(`lost-found 数据表初始化跳过（MySQL 不可用）: ${String(e)}`);
+    }
+    try {
+      await initLogTables();
+    } catch (e) {
+      log.WARN(`logs 数据表初始化跳过（MySQL 不可用）: ${String(e)}`);
+    }
+
+    // Redis 消息队列：连不上不影响启动，日志改为直写、大屏退回本机推送
+    const redisReady = await initRedis();
+    if (redisReady) {
+      await startLogQueueConsumer();
+    }
+    await startAnalyticsPush();
+
     app.listen(config.port, () => {
       log.INFO(`后端服务已启动: http://localhost:${config.port}`);
       log.INFO(`允许跨域的前端地址: ${config.frontendUrl}`);
+      log.INFO(`语音交互接口: POST /api/v1/asr-tts/asr | GET /api/v1/tts/stream (新) | GET /api/v1/asr-tts/tts/stream (旧，redirect)`);
+      log.INFO(`日志审计接口: GET /api/v1/logs/{operation|error|login} | GET /api/v1/logs/trace/:traceId`);
+      log.INFO(`大屏统计: GET /api/v1/analytics/stats | SSE /api/v1/analytics/stream`);
     });
   } catch (error) {
     log.ERROR(`后端服务启动失败: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   }
 }
+
+// 优雅关闭：先停消费者与定时器，再断开 Redis / MySQL
+async function shutdown(signal: string): Promise<void> {
+  log.INFO(`收到 ${signal}，正在关闭服务...`);
+  await stopLogQueueConsumer();
+  await cleanupAnalytics();
+  await closeRedis();
+  await closeDb();
+  process.exit(0);
+}
+
+process.once('SIGINT', () => {
+  void shutdown('SIGINT');
+});
+process.once('SIGTERM', () => {
+  void shutdown('SIGTERM');
+});
 
 bootstrap();

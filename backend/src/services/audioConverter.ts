@@ -8,6 +8,7 @@
  *              若 ffmpeg 不可用（开发机未跑 install.js 或部署环境未安装），
  *              自动降级为「原样返回 buffer」，不阻断 ASR 主流程。
  */
+import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -15,6 +16,9 @@ import { join } from 'node:path';
 import { createLogger } from '../common/logger.js';
 
 const logger = createLogger('audio-converter');
+
+/** ESM 项目里加载 CJS 模块（fluent-ffmpeg / ffmpeg-static 均为 CommonJS 包） */
+const require = createRequire(import.meta.url);
 
 /** fluent-ffmpeg 默认导出是函数（CommonJS require） */
 // eslint-disable-next-line @typescript-eslint/no-var-requires

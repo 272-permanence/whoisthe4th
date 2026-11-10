@@ -11,6 +11,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    Avatar: typeof import('./src/components/common/Avatar.vue')['default']
     ConversationList: typeof import('./src/components/interaction/ConversationList.vue')['default']
     DigitalHumanAvatar: typeof import('./src/components/interaction/DigitalHumanAvatar.vue')['default']
     HelloWorld: typeof import('./src/components/HelloWorld.vue')['default']
@@ -18,6 +19,7 @@ declare module 'vue' {
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     TextInputBar: typeof import('./src/components/interaction/TextInputBar.vue')['default']
+    TtsAudioPlayer: typeof import('./src/components/common/TtsAudioPlayer.vue')['default']
     VanButton: typeof import('vant/es')['Button']
     VanCell: typeof import('vant/es')['Cell']
     VanCellGroup: typeof import('vant/es')['CellGroup']
