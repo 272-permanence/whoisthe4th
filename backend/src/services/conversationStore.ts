@@ -4,10 +4,11 @@
  * @date 2026-10-20
  * @description 封装 conversation / rag_source 两张表的 CRUD。
  *              MySQL 不可用时（未装、未配置）自动降级为内存存储，chat 路由不会崩。
+ *              全组改成读写分离后，SELECT 走从库（getSlavePool），INSERT/UPDATE 走主库（getDbPool）。
  */
 
 import { randomUUID } from 'node:crypto';
-import { getDbPool } from '../utils/db.js';
+import { getDbPool, getSlavePool } from '../utils/db.js';
 import { createLogger } from '../common/logger.js';
 
 const log = createLogger('conversation-store');
@@ -65,7 +66,7 @@ export async function ensureSession(
 }
 
 /**
- * 保存一条消息到 conversation 表
+ * 保存一条消息到 conversation 表（走主库）
  * @returns 插入的自增 ID（MySQL 可用时）或 -1（内存回退）
  */
 export async function saveConversation(
@@ -122,11 +123,11 @@ export async function saveRagSources(convId: number, sources: RagSourceRow[]): P
 }
 
 /**
- * 查询某个会话的全部历史（供多轮对话上下文用）
+ * 查询某个会话的全部历史（供多轮对话上下文用，走从库）
  */
 export async function loadSessionHistory(sessionId: string): Promise<ConversationRow[]> {
   try {
-    const pool = getDbPool();
+    const pool = getSlavePool();
     const [rows] = await pool.execute(
       'SELECT id, session_id, role, content, rag_used, created_at FROM conversation WHERE session_id = ? ORDER BY id ASC',
       [sessionId]

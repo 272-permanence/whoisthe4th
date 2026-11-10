@@ -1,9 +1,10 @@
 /**
  * @file 后端配置管理模块
- * @author 第八组（成员A）
+ * @author 第八组
  * @date 2026-10-15
  * @description 统一从环境变量读取服务配置（端口、ASR/TTS 提供方、超时时间等）。
  *              业务代码禁止硬编码端口、URL、超时时间等魔法值。
+ *              MySQL 读写分离（成员D 牵头）+ JWT（成员C）+ 高德（成员B）三段配置共存。
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,34 +31,24 @@ const DEFAULT_TTS_VOLUME = '+0%';
 const DEFAULT_TTS_PITCH = '+0Hz';
 const DEFAULT_TTS_MOCK_SAMPLE_RATE = 24_000;
 const DEFAULT_DASHSCOPE_MODEL = 'qwen-plus';
-/** DashScope OpenAI 兼容端点（中国区） */
 const DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
-/** 知识库默认向量模型（需与成员B 的 RAG 链路保持一致） */
 const DEFAULT_EMBEDDING_MODEL = 'bge-m3';
 
-/** ASR 提供方：mock 离线桩 / whisper-api 远程接口 / whisper-cli 本地 Whisper 可执行程序 */
-export type AsrProvider = 'mock' | 'whisper-api' | 'whisper-cli';
+/** MySQL 默认端口（phpstudy MySQL 8.0，禅道 MySQL 5.5 禁了 InnoDB 不可用） */
+const DEFAULT_DB_MASTER_PORT = 3307;
+const DEFAULT_DB_SLAVE_PORT = 3307;
 
-/** TTS 提供方：edge 微软 Edge 在线合成（Python edge-tts）/ mock 离线合成（无网络演示用） */
+/** ASR 提供方 */
+export type AsrProvider = 'mock' | 'whisper-api' | 'whisper-cli';
+/** TTS 提供方 */
 export type TtsProvider = 'edge' | 'mock';
 
-/**
- * 读取字符串型环境变量
- * @param name 环境变量名
- * @param fallback 未配置时的默认值
- * @returns 环境变量值或默认值
- */
+/** 读取字符串型环境变量 */
 function readText(name: string, fallback: string): string {
   const value = process.env[name];
   return value === undefined || value.trim() === '' ? fallback : value.trim();
 }
-
-/**
- * 读取整数型环境变量
- * @param name 环境变量名
- * @param fallback 未配置或非法时的默认值
- * @returns 解析后的整数
- */
+/** 读取整数型环境变量 */
 function readInt(name: string, fallback: number): number {
   const parsed = Number.parseInt(readText(name, String(fallback)), 10);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -66,29 +57,40 @@ function readInt(name: string, fallback: number): number {
 export const config = {
   port: readInt('PORT', DEFAULT_PORT),
   frontendUrl: readText('FRONTEND_URL', DEFAULT_FRONTEND_URL),
-  /** 单次音频上传的体积上限（字节） */
   uploadMaxBytes: readInt('UPLOAD_MAX_BYTES', DEFAULT_UPLOAD_MAX_BYTES),
 
-  // DashScope 配置（OpenAI 兼容模式），供成员B 的流式问答接口使用
+  // DashScope（成员B：流式问答）
   dashscope: {
     apiKey: readText('DASHSCOPE_API_KEY', ''),
     model: readText('DASHSCOPE_MODEL', DEFAULT_DASHSCOPE_MODEL),
     baseUrl: DASHSCOPE_BASE_URL
   },
 
+  // 高德地图（成员B：导航页）
+  amap: {
+    /** JS API 前端地图渲染用 */
+    jsKey: readText('AMAP_JS_KEY', ''),
+    /** JS API 2.0 安全密钥，前端加载前需设 window._AMapSecurityConfig */
+    jsSecurityCode: readText('AMAP_JS_SECURITY_CODE', ''),
+    /** Web 服务 key（路径规划等走后端代理，key 不出后端） */
+    webServiceKey: readText('AMAP_WEB_SERVICE_KEY', ''),
+    /** 步行路径规划端点 */
+    directionWalkingUrl: 'https://restapi.amap.com/v3/direction/walking',
+    /** 驾车路径规划端点 */
+    directionDrivingUrl: 'https://restapi.amap.com/v3/direction/driving',
+    /** 驾车避拥堵端点（高速+普通公路） */
+    directionDrivingAvoidUrl: 'https://restapi.amap.com/v3/direction/driving?extensions=all&strategy=10'
+  },
+
   asr: {
     provider: readText('ASR_PROVIDER', 'mock') as AsrProvider,
     language: readText('ASR_LANGUAGE', DEFAULT_ASR_LANGUAGE),
     timeoutMs: readInt('ASR_TIMEOUT_MS', DEFAULT_ASR_TIMEOUT_MS),
-    /** OpenAI 兼容的语音识别接口地址，如硅基流动、阿里云百炼的 /v1 均可复用 */
     whisperApiUrl: readText('WHISPER_API_URL', DEFAULT_WHISPER_API_URL),
     whisperApiKey: readText('WHISPER_API_KEY', ''),
     whisperModel: readText('WHISPER_MODEL', DEFAULT_WHISPER_MODEL),
-    /** mock 提供方返回的固定文本（离线演示用） */
     mockText: readText('ASR_MOCK_TEXT', DEFAULT_ASR_MOCK_TEXT),
-    /** whisper-cli 提供方：可执行程序，如 python 或 whisper-cli（whisper.cpp） */
     cliBin: readText('ASR_CLI_BIN', 'python'),
-    /** whisper-cli 提供方：参数模板，{audio} 会被替换为临时 WAV 文件路径 */
     cliArgs: readText(
       'ASR_CLI_ARGS',
       `${path.join(BACKEND_ROOT, 'scripts', 'whisper_transcribe.py')} --audio {audio} --model small`
@@ -97,42 +99,40 @@ export const config = {
 
   tts: {
     provider: readText('TTS_PROVIDER', 'edge') as TtsProvider,
-    /** 具备 edge-tts 依赖的 Python 解释器路径 */
     python: readText('TTS_PYTHON', 'python'),
-    /** 流式合成脚本路径 */
     edgeScript: readText('TTS_EDGE_SCRIPT', path.join(BACKEND_ROOT, 'scripts', 'edge_tts_stream.py')),
     voice: readText('TTS_VOICE', DEFAULT_TTS_VOICE),
     rate: readText('TTS_RATE', DEFAULT_TTS_RATE),
     volume: readText('TTS_VOLUME', DEFAULT_TTS_VOLUME),
     pitch: readText('TTS_PITCH', DEFAULT_TTS_PITCH),
-    /** mock 提供方生成的音频采样率 */
     mockSampleRate: readInt('TTS_MOCK_SAMPLE_RATE', DEFAULT_TTS_MOCK_SAMPLE_RATE)
   },
 
-  // 知识库（成员C）：向量库与向量化服务配置
-  /** Qdrant 服务地址，留空则使用进程内内存向量库 */
+  // 知识库（成员C）
   qdrantUrl: readText('QDRANT_URL', ''),
-  /** 向量服务地址（OpenAI 兼容接口），留空则使用本地确定性伪向量 */
   embeddingApiUrl: readText('EMBEDDING_API_URL', ''),
-  /** 向量服务访问凭证 */
   embeddingApiKey: readText('EMBEDDING_API_KEY', ''),
-  /** 向量模型名，需与成员B 的 RAG 链路保持一致 */
   embeddingModel: readText('EMBEDDING_MODEL', DEFAULT_EMBEDDING_MODEL),
-  /** 向量维度，需与成员B 的 RAG 链路保持一致 */
   embeddingDimension: readInt('EMBEDDING_DIMENSION', KB_EMBEDDING_DIMENSION),
 
-  // MySQL 物理数据库（任务3）
-  mysql: {
-    host: readText('DB_HOST', 'localhost-unconfigured'),
-    port: readInt('DB_PORT', 3306),
-    user: readText('DB_USER', 'root'),
-    password: readText('DB_PASSWORD', ''),
-    database: readText('DB_NAME', 'scenic_ai')
-  },
-
-  // JWT 认证配置（成员C）
+  // JWT 认证（成员C）
   jwt: {
     secret: readText('JWT_SECRET', 'scenic-ai-dev-secret-change-in-production-2026'),
     expiresIn: readText('JWT_EXPIRES_IN', '7d')
+  },
+
+  // MySQL 读写分离（成员D 牵头，全组复用）
+  db: {
+    database: readText('DB_NAME', 'scenic_ai'),
+    user: readText('DB_USER', 'root'),
+    password: readText('DB_PASSWORD', ''),
+    master: {
+      host: readText('DB_MASTER_HOST', '127.0.0.1'),
+      port: readInt('DB_MASTER_PORT', DEFAULT_DB_MASTER_PORT)
+    },
+    slave: {
+      host: readText('DB_SLAVE_HOST', '127.0.0.1'),
+      port: readInt('DB_SLAVE_PORT', DEFAULT_DB_SLAVE_PORT)
+    }
   }
 } as const;

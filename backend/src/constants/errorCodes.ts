@@ -11,10 +11,12 @@ export const ErrorCodeEnum = {
   INVALID_AUDIO: 40002,
   /** 上传文件超出体积上限 */
   PAYLOAD_TOO_LARGE: 40003,
-  /** 未登录或缺少身份标识 */
+  /** 未登录或缺少身份标识（成员C JWT 鉴权） */
   UNAUTHORIZED: 40100,
-  /** 已登录但无该接口权限 */
+  /** 已登录但无该接口权限（成员C JWT 鉴权） */
   FORBIDDEN: 40300,
+  /** 资源不存在（成员D） */
+  NOT_FOUND: 40401,
   /** 语音识别服务不可用 */
   ASR_FAILED: 50001,
   /** 语音合成服务不可用 */

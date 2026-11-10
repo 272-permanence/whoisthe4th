@@ -1,5 +1,14 @@
 node_modules/
 dist/
 .env
+.env.local
+.env.*.local
 .DS_Store
 *.log
+
+# Office 临时锁文件
+~$*
+# 本地录像/临时文件
+*.mp4
+*.mov
+*.avi
