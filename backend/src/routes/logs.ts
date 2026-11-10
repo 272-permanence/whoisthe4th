@@ -1,23 +1,116 @@
 /**
- * @file 日志查询路由（成员D · 数据洞察）
- * @description 提供 error_log / operation_log / login_log 的分页查询与全链路追踪接口。
- *              所有接口仅限管理员访问（requireAuth + requireRole(['admin'])）。
+ * @file 日志系统 · 路由（成员D · 数据洞察）
+ * @description 挂载在 /api/v1/logs，包含前端埋点上报与日志查询两部分：
  *
- *   GET /api/v1/logs/operation   分页查操作日志
- *   GET /api/v1/logs/error       分页查错误日志
- *   GET /api/v1/logs/login       分页查登录日志
+ *   【埋点上报 · 公开接口（放在管理员守卫之前）】
+ *   POST /api/v1/logs/operation   前端 trackClick 埋点（映射到 operation_log）
+ *   POST /api/v1/logs/error       前端 trackError 错误上报（映射到 error_log）
+ *
+ *   【日志查询 · 仅限管理员（requireAuth + requireRole(['admin'])）】
+ *   GET /api/v1/logs/operation    分页查操作日志
+ *   GET /api/v1/logs/error        分页查错误日志
+ *   GET /api/v1/logs/login        分页查登录日志
  *   GET /api/v1/logs/trace/:traceId  按 traceId 查全链路（串联三类日志）
  */
 
 import { Router, type Request, type Response } from 'express';
 import { executeRead } from '../analytics/db.js';
+import { ErrorCodeEnum } from '../common/errorCodes.js';
 import { createLogger } from '../common/logger.js';
+import { saveErrorLog, saveOperationLog } from '../services/logService.js';
 import { requireAuth, requireRole } from './authGuard.js';
 
 const log = createLogger('logs');
 const router = Router();
 
-// 全部接口都需要管理员权限
+// ============================ 埋点上报（公开，无鉴权） ============================
+// 前端 utils/track.ts 用裸 fetch 上报（best-effort 旁路请求，不带 token），
+// 因此这两个 POST 必须注册在管理员权限守卫之前。
+// 字段对齐前端 TrackLogPayload，映射到本组 3 表结构（trace_id 贯穿全链路）。
+
+/** 截断字符串，超长返回 null 视为非法 */
+function clip(value: unknown, max: number): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (trimmed === '' || trimmed.length > max) return null;
+  return trimmed;
+}
+
+/** 上限常量，防异常超大 payload */
+const MAX_TEXT = 512;
+const MAX_PATH = 256;
+const MAX_ID = 128;
+
+// POST /operation：前端点击埋点 → operation_log
+router.post('/operation', async (req: Request, res: Response) => {
+  try {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const resourceId = clip(body.resourceId, MAX_ID);
+    const resourceType = clip(body.resourceType, MAX_ID);
+    if (resourceId === null || resourceType === null) {
+      res.status(400).json({ code: ErrorCodeEnum.INVALID_PARAM, message: 'resourceId / resourceType 不能为空' });
+      return;
+    }
+    const action = clip(body.action, 32) ?? 'click';
+    const pagePath = clip(body.pagePath, MAX_PATH) ?? '/';
+
+    // 写入队列（Redis 不可用时内部自动降级直写 MySQL），失败不影响响应
+    await saveOperationLog({
+      trace_id: req.traceId ?? 'unknown',
+      user_id: typeof body.userId === 'number' || typeof body.userId === 'string' ? Number(body.userId) || null : null,
+      api_path: pagePath,
+      http_method: 'CLICK',
+      request_params: {
+        action,
+        resourceType,
+        resourceId,
+        client_ts: Number(body.timestamp) || Date.now(),
+        ...(body.extra && typeof body.extra === 'object' ? body.extra : {})
+      } as Record<string, unknown>,
+      response_code: 200,
+      ip: req.ip ?? null,
+      user_agent: typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : null
+    });
+
+    res.json({ code: 0, message: 'ok', data: { accepted: true } });
+  } catch (error) {
+    log.ERROR(`埋点操作日志写入失败: ${String(error)}`);
+    res.status(500).json({ code: ErrorCodeEnum.INTERNAL_ERROR, message: '操作日志写入失败' });
+  }
+});
+
+// POST /error：前端 JS 错误上报 → error_log
+router.post('/error', async (req: Request, res: Response) => {
+  try {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const errorMessage = clip(body.errorMessage, MAX_TEXT);
+    if (errorMessage === null) {
+      res.status(400).json({ code: ErrorCodeEnum.INVALID_PARAM, message: 'errorMessage 必填' });
+      return;
+    }
+    const errorName = clip(body.errorName, 64) ?? 'Error';
+    const pagePath = clip(body.pagePath, MAX_PATH) ?? '/';
+
+    await saveErrorLog({
+      trace_id: req.traceId ?? 'unknown',
+      error_type: 'system',
+      error_code: errorName,
+      stack: clip(body.stack, 4096),
+      route: pagePath,
+      service: clip(body.source, 64) ?? 'frontend',
+      user_id: typeof body.userId === 'number' || typeof body.userId === 'string' ? Number(body.userId) || null : null
+    });
+
+    res.json({ code: 0, message: 'ok', data: { accepted: true } });
+  } catch (error) {
+    log.ERROR(`埋点错误日志写入失败: ${String(error)}`);
+    res.status(500).json({ code: ErrorCodeEnum.INTERNAL_ERROR, message: '错误日志写入失败' });
+  }
+});
+
+// ============================ 日志查询（管理员） ============================
+
+// 以下查询接口都需要管理员权限
 router.use(requireAuth, requireRole(['admin']));
 
 // ============================ 工具函数 ============================

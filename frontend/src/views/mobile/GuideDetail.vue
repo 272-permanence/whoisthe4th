@@ -9,6 +9,8 @@ import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { showToast, showLoadingToast, closeToast } from 'vant';
 import { fetchRouteDetail, type RouteDetail } from '../../api/guide';
+import { trackAutoBind } from '../../utils/track';
+import Avatar from '../../components/common/Avatar.vue';
 
 const route = useRoute();
 const detail = ref<RouteDetail | null>(null);
@@ -45,11 +47,23 @@ async function load() {
   }
 }
 
-onMounted(load);
+onMounted(() => {
+  load();
+  trackAutoBind();
+});
 </script>
 
 <template>
   <div v-if="detail" class="guide-detail">
+    <!-- 数字人导览员（成员A 公用 Avatar） -->
+    <div class="guide-detail__avatar-bar">
+      <Avatar mode="breathing" size="sm" />
+      <div class="guide-detail__avatar-info">
+        <span class="guide-detail__avatar-name">小导 · 数字人</span>
+        <span class="guide-detail__avatar-tip">正在查看路线：{{ detail.name }}</span>
+      </div>
+    </div>
+
     <!-- 路线头部 -->
     <div class="route-header">
       <h1>{{ detail.name }}</h1>
@@ -75,6 +89,7 @@ onMounted(load);
         v-for="step in detail.steps"
         :key="step.poi_id"
         class="step-item"
+        :data-track="`poi-step:${step.poi_id}`"
       >
         <div class="step-seq">{{ step.seq }}</div>
         <div class="step-body">
@@ -194,5 +209,34 @@ onMounted(load);
 
 .no-steps {
   padding: 16px 0;
+}
+
+/* 数字人导览员横条（成员A 公用 Avatar） */
+.guide-detail__avatar-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  margin: 12px 12px 4px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%);
+  border: 1px solid #dbeafe;
+}
+.guide-detail__avatar-bar :deep(.avatar) {
+  flex-shrink: 0;
+}
+.guide-detail__avatar-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.guide-detail__avatar-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e40af;
+}
+.guide-detail__avatar-tip {
+  font-size: 12px;
+  color: #3b82f6;
 }
 </style>

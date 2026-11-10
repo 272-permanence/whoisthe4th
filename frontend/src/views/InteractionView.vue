@@ -110,6 +110,8 @@ async function askQuestion(question: string): Promise<void> {
     pipelineError.value = '请输入有效的问题'
     return
   }
+  // 手动埋点：用户发起提问（文字/语音共用此入口）
+  trackClick('ask-question', 'interaction', { questionPreview: trimmed.slice(0, 50) })
   if (isStreaming.value) {
     stopSpeaking()
   }
@@ -162,6 +164,11 @@ async function handleSpeechEnd(wav: Blob): Promise<void> {
     isRecognizing.value = false
   }
 }
+
+// 页面挂载时自动绑定 data-track 埋点
+onMounted(() => {
+  trackAutoBind()
+})
 </script>
 
 <template>
@@ -183,7 +190,7 @@ async function handleSpeechEnd(wav: Blob): Promise<void> {
       <p class="interaction__status">{{ avatarStatus }}</p>
       <p class="interaction__engine">渲染方式：{{ avatarRenderer }}</p>
       <p class="interaction__engine">语音合成引擎：{{ provider === '' ? '未启动' : provider }}</p>
-      <button v-if="isStreaming" class="interaction__stop" type="button" @click="stopSpeaking">
+      <button v-if="isStreaming" class="interaction__stop" type="button" data-track="interaction:stop-speaking" @click="stopSpeaking">
         停止播报
       </button>
     </aside>
