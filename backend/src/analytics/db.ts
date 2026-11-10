@@ -85,8 +85,9 @@ function buildPool(host: string, port: number, user: string, password: string, d
 /** 获取主库池（写操作 / 不确定时用这个最安全） */
 export function getMasterPool(): Pool {
   if (!masterPool) {
-    const master = config.db.master;
-    masterPool = buildPool(master.host, master.port, master.user, master.password, master.database, 'master');
+    const { user, password, database } = config.db;
+    const { host, port } = config.db.master;
+    masterPool = buildPool(host, port, user, password, database, 'master');
   }
   return masterPool;
 }
@@ -94,8 +95,9 @@ export function getMasterPool(): Pool {
 /** 获取从库池（读操作，减轻主库压力） */
 export function getSlavePool(): Pool {
   if (!slavePool) {
-    const slave = config.db.slave;
-    slavePool = buildPool(slave.host, slave.port, slave.user, slave.password, slave.database, 'slave');
+    const { user, password, database } = config.db;
+    const { host, port } = config.db.slave;
+    slavePool = buildPool(host, port, user, password, database, 'slave');
   }
   return slavePool;
 }

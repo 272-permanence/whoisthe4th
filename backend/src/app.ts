@@ -30,7 +30,7 @@ import productRouter from './routes/product.js';
 import contentRouter from './routes/content.js';
 import adminContentRouter from './routes/adminContent.js';
 import userRouter from './routes/user.js';
-import uploadRouter from './routes/upload.js';
+// import uploadRouter from './routes/upload.js';  // C 的 upload 路由，merge C rbac 时恢复
 
 // 成员D：移动端模块（首页 / 游玩攻略 / 失物招领 / POI CRUD）
 import lostFoundRouter from './routes/lostFound.js';
@@ -62,7 +62,7 @@ app.use('/api/v1/products', productRouter);
 app.use('/api/v1/content', contentRouter);
 app.use('/api/v1/admin/content', adminContentRouter);
 app.use('/api/v1/admin/users', userRouter);
-app.use('/api/v1/upload', uploadRouter);
+// app.use('/api/v1/upload', uploadRouter);  // C 的 upload 路由，merge C rbac 时恢复
 
 // 成员D
 app.use('/api/v1/lost-found', lostFoundRouter);
