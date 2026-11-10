@@ -13,10 +13,9 @@ import { KB_EMBEDDING_DIMENSION } from './constants/kbConstants.js';
 
 dotenv.config();
 
-/** 后端工程根目录（src/ 与编译产物 dist/ 都只比根目录深一层） */
 const BACKEND_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-// ---------- 默认值：所有魔法值在此统一声明 ----------
+// ---------- 默认值 ----------
 const DEFAULT_PORT = 8000;
 const DEFAULT_FRONTEND_URL = 'http://localhost:5173';
 const DEFAULT_UPLOAD_MAX_BYTES = 20 * 1024 * 1024;
@@ -33,25 +32,19 @@ const DEFAULT_TTS_MOCK_SAMPLE_RATE = 24_000;
 const DEFAULT_DASHSCOPE_MODEL = 'qwen-plus';
 const DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
 const DEFAULT_EMBEDDING_MODEL = 'bge-m3';
-
-/** MySQL 默认端口（phpstudy MySQL 8.0，禅道 MySQL 5.5 禁了 InnoDB 不可用） */
 const DEFAULT_DB_MASTER_PORT = 3307;
 const DEFAULT_DB_SLAVE_PORT = 3307;
 
-/** ASR 提供方 */
 export type AsrProvider = 'mock' | 'whisper-api' | 'whisper-cli';
-/** TTS 提供方 */
 export type TtsProvider = 'edge' | 'mock';
 
-/** 读取字符串型环境变量 */
 function readText(name: string, fallback: string): string {
-  const value = process.env[name];
-  return value === undefined || value.trim() === '' ? fallback : value.trim();
+  const v = process.env[name];
+  return v === undefined || v.trim() === '' ? fallback : v.trim();
 }
-/** 读取整数型环境变量 */
 function readInt(name: string, fallback: number): number {
-  const parsed = Number.parseInt(readText(name, String(fallback)), 10);
-  return Number.isFinite(parsed) ? parsed : fallback;
+  const p = Number.parseInt(readText(name, String(fallback)), 10);
+  return Number.isFinite(p) ? p : fallback;
 }
 
 export const config = {
@@ -68,17 +61,11 @@ export const config = {
 
   // 高德地图（成员B：导航页）
   amap: {
-    /** JS API 前端地图渲染用 */
     jsKey: readText('AMAP_JS_KEY', ''),
-    /** JS API 2.0 安全密钥，前端加载前需设 window._AMapSecurityConfig */
     jsSecurityCode: readText('AMAP_JS_SECURITY_CODE', ''),
-    /** Web 服务 key（路径规划等走后端代理，key 不出后端） */
     webServiceKey: readText('AMAP_WEB_SERVICE_KEY', ''),
-    /** 步行路径规划端点 */
     directionWalkingUrl: 'https://restapi.amap.com/v3/direction/walking',
-    /** 驾车路径规划端点 */
     directionDrivingUrl: 'https://restapi.amap.com/v3/direction/driving',
-    /** 驾车避拥堵端点（高速+普通公路） */
     directionDrivingAvoidUrl: 'https://restapi.amap.com/v3/direction/driving?extensions=all&strategy=10'
   },
 
@@ -91,10 +78,7 @@ export const config = {
     whisperModel: readText('WHISPER_MODEL', DEFAULT_WHISPER_MODEL),
     mockText: readText('ASR_MOCK_TEXT', DEFAULT_ASR_MOCK_TEXT),
     cliBin: readText('ASR_CLI_BIN', 'python'),
-    cliArgs: readText(
-      'ASR_CLI_ARGS',
-      `${path.join(BACKEND_ROOT, 'scripts', 'whisper_transcribe.py')} --audio {audio} --model small`
-    )
+    cliArgs: readText('ASR_CLI_ARGS', `${path.join(BACKEND_ROOT, 'scripts', 'whisper_transcribe.py')} --audio {audio} --model small`)
   },
 
   tts: {

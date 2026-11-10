@@ -2,7 +2,7 @@
  * @file 应用入口：中间件注册、路由挂载、统一错误处理
  * @author 第八组
  * @date 2026-10-15
- * @description 景区导览 AI 数字人后端服务入口
+ * @description 景区导览 AI 数字人后端服务入口（合并 B/C/D 全部路由）
  */
 import express, { type NextFunction, type Request, type Response } from 'express';
 import cors from 'cors';
@@ -12,8 +12,9 @@ import { ErrorCodeEnum } from './constants/errorCodes.js';
 import { HttpError } from './utils/httpError.js';
 import { createLogger } from './common/logger.js';
 
-// 成员B：问答
+// 成员B：问答 + 导航（高德路径规划代理，B 独有）
 import chatRouter from './routes/chat.js';
+import navigationRouter from './routes/navigation.js';
 
 // 成员A：语音交互
 import analyticsRouter from './analytics/routes.js';
@@ -39,10 +40,7 @@ const log = createLogger('app');
 const app = express();
 
 // ========== 中间件 ==========
-app.use(cors({
-  origin: config.frontendUrl,
-  credentials: true
-}));
+app.use(cors({ origin: config.frontendUrl, credentials: true }));
 app.use(express.json());
 
 // ========== 静态托管：用户端可直接访问后台上传的图片 ==========
@@ -53,6 +51,9 @@ app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d' }));
 app.use('/api/v1/chat', chatRouter);
 app.use('/api/v1/analytics', analyticsRouter);
 app.use('/api/v1/asr-tts', asrTtsRouter);
+
+// 成员B：高德路径规划代理（导航页用，B 独有路由）
+app.use('/api/v1/navigation', navigationRouter);
 
 // 成员C
 app.use('/api/v1/kb', kbRouter);
@@ -89,7 +90,7 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json({ code: ErrorCodeEnum.INTERNAL_ERROR, message: '服务器内部错误' });
 });
 
-// ========== 启动服务（先初始化 MySQL analytics 表，再 listen）==========
+// ========== 启动服务 ==========
 async function bootstrap(): Promise<void> {
   try {
     await initAnalyticsTables();

@@ -100,6 +100,18 @@ const routes = [
 
   // ============ 登录页（成员C） ============
   {
+    path: '/pois',
+    name: 'poi-list',
+    component: () => import('../views/PoiList.vue'),
+    meta: { title: '景点导览' }
+  },
+  {
+    path: '/navigate',
+    name: 'navigate',
+    component: () => import('../views/Navigate.vue'),
+    meta: { title: 'AI 导航' }
+  },
+  {
     path: '/login',
     name: 'login',
     component: () => import('../views/Login.vue'),
