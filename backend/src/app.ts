@@ -12,25 +12,21 @@ import { ErrorCodeEnum } from './constants/errorCodes.js';
 import { HttpError } from './utils/httpError.js';
 import { createLogger } from './common/logger.js';
 
-// 成员B：问答 + 导航 + POI + 路线
+// 成员B：问答
 import chatRouter from './routes/chat.js';
-// 成员B 的 POI / 路线 / 导航路由（等 stash pop 时再挂，D 已经在 routes/poi.ts 写了自己的版本）
-// import poiRouter from './routes/poi.js';
-// import routesRouter from './routes/routes.js';
-// import navigationRouter from './routes/navigation.js';
 
 // 成员A：语音交互
 import analyticsRouter from './analytics/routes.js';
 import asrTtsRouter from './routes/asrTts.js';
 
-// 成员C：知识库 + 鉴权 + 内容管理
+// 成员C：知识库 + 鉴权 + 内容管理 + 图片上传
 import kbRouter from './routes/kb.js';
 import authRouter from './routes/auth.js';
 import productRouter from './routes/product.js';
 import contentRouter from './routes/content.js';
 import adminContentRouter from './routes/adminContent.js';
 import userRouter from './routes/user.js';
-// import uploadRouter from './routes/upload.js';  // C 的 upload 路由，merge C rbac 时恢复
+import uploadRouter, { UPLOAD_DIR } from './routes/upload.js';
 
 // 成员D：移动端模块（首页 / 游玩攻略 / 失物招领 / POI CRUD）
 import lostFoundRouter from './routes/lostFound.js';
@@ -49,6 +45,9 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// ========== 静态托管：用户端可直接访问后台上传的图片 ==========
+app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d' }));
+
 // ========== 路由挂载 ==========
 // 成员A
 app.use('/api/v1/chat', chatRouter);
@@ -62,16 +61,13 @@ app.use('/api/v1/products', productRouter);
 app.use('/api/v1/content', contentRouter);
 app.use('/api/v1/admin/content', adminContentRouter);
 app.use('/api/v1/admin/users', userRouter);
-// app.use('/api/v1/upload', uploadRouter);  // C 的 upload 路由，merge C rbac 时恢复
+app.use('/api/v1/admin/upload', uploadRouter);
 
 // 成员D
 app.use('/api/v1/lost-found', lostFoundRouter);
 app.use('/api/v1/home', homeRouter);
 app.use('/api/v1/routes', guideRouter);
 app.use('/api/v1/poi', dPoiRouter);
-
-// 成员B 的导航路由（等 stash pop 再挂，避免和 D 的 poi 路由冲突）
-// app.use('/api/v1/navigation', navigationRouter);
 
 // ========== 健康检查 ==========
 app.get('/health', (_req, res) => {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { listPublishedContent, type ContentItem } from '../api/content';
+import { listPublishedContent, resolveImageUrl, type ContentItem } from '../api/content';
 
 const router = useRouter();
 
@@ -11,7 +11,7 @@ const loading = ref(true);
 const activeSlide = ref(0);
 
 // 核心功能模块（未来可从 content/scenic 拉，当前保持前端导航用）
-const modules = [
+const modules: { name: string; desc: string; path: string; color: string; icon: string; disabled?: boolean }[] = [
   { name: 'AI 智能问答', desc: '景区导览问答 · 流式回答 · 引用来源', path: '/qa', color: '#1976d2', icon: '💬' },
   { name: '数字人语音交互', desc: '虚拟讲解员 · 语音对话 · 口型同步', path: '/interaction', color: '#7b1fa2', icon: '🎤' },
   { name: '数据大屏', desc: '情感分析 · 舆情监控 · 可视化大屏', path: '/dashboard', color: '#d84315', icon: '📊' }
@@ -41,7 +41,7 @@ onMounted(loadContent);
         :key="c.id"
         v-show="i === activeSlide"
         class="slide"
-        :style="c.image_url ? { backgroundImage: `url(${c.image_url})` } : {}"
+        :style="c.image_url ? { backgroundImage: `url(${resolveImageUrl(c.image_url)})` } : {}"
       >
         <div class="slide-overlay"></div>
         <div class="slide-text">

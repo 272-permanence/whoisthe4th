@@ -1,22 +1,47 @@
 <script setup lang="ts">
-<<<<<<< HEAD
-import { ref, onMounted, computed } from 'vue';
-import { listAllContent, createContent, updateContent, deleteContent, togglePublishContent, type ContentItem, type ContentType } from '../../api/content';
+/**
+ * @file 内容管理后台（成员C · 代搭，合并成员D 的 POI/路线 CRUD）
+ * @description
+ *   Tab 1：内容管理（C）—— 首页轮播、公告、景点文案、路线推荐文案、关于我们
+ *   Tab 2：POI/路线（D）—— 景点坐标/描述 CRUD、路线途经点 CRUD
+ *   图片上传走 C 的 /api/v1/admin/upload（静态托管 /uploads）
+ * @author 第八组
+ * @date 2026-11-10
+ */
+import { ref, onMounted } from 'vue';
 
-const TABS: { key: ContentType; label: string }[] = [
+// ===== 成员C：内容管理（api/content）=====
+import {
+  listAllContent, createContent, updateContent, deleteContent,
+  togglePublishContent, uploadImage, resolveImageUrl,
+  type ContentItem, type ContentType
+} from '../../api/content';
+
+// ===== 成员D：POI / 路线 CRUD（api/poi + api/routeAdmin）=====
+import { showToast, showConfirmDialog } from 'vant';
+import { fetchPois, createPoi, updatePoi, deletePoi, type PoiItem } from '../../api/poi';
+import { fetchRoutesAdmin, createRoute, updateRoute, deleteRoute, type RouteAdminItem } from '../../api/routeAdmin';
+
+// ================== 顶层：两个大 tab ==================
+type TopTab = 'content' | 'poi';
+const topTab = ref<TopTab>('content');
+
+// ================== Tab 1：内容管理（成员C）==================
+const CONTENT_TABS: { key: ContentType; label: string }[] = [
   { key: 'carousel', label: '首页轮播' },
   { key: 'announcement', label: '公告' },
-  { key: 'scenic', label: '景点' },
-  { key: 'route', label: '推荐路线' },
-  { key: 'about', label: '关于我们' }
+  { key: 'scenic', label: '景点文案' },
+  { key: 'route', label: '路线文案' },
+  { key: 'about', label: '关于我们' },
 ];
-
-const activeTab = ref<ContentType>('carousel');
+const activeContentTab = ref<ContentType>('carousel');
 const list = ref<ContentItem[]>([]);
 const loading = ref(false);
 const showForm = ref(false);
 const editing = ref<ContentItem | null>(null);
 const errorMsg = ref('');
+const uploading = ref(false);
+const fileInput = ref<HTMLInputElement | null>(null);
 
 const form = ref({
   title: '', subtitle: '', content: '', image_url: '',
@@ -26,14 +51,14 @@ const form = ref({
 async function loadList() {
   loading.value = true; errorMsg.value = '';
   try {
-    list.value = await listAllContent(activeTab.value);
+    list.value = await listAllContent(activeContentTab.value);
   } catch (err: unknown) {
     errorMsg.value = err instanceof Error ? err.message : '加载失败';
   } finally { loading.value = false; }
 }
 
 function switchTab(tab: ContentType) {
-  activeTab.value = tab;
+  activeContentTab.value = tab;
   showForm.value = false;
   loadList();
 }
@@ -60,7 +85,7 @@ async function handleSave() {
   if (!form.value.title.trim()) { errorMsg.value = '标题必填'; return; }
   try {
     const body: Record<string, unknown> = {
-      type: activeTab.value, title: form.value.title,
+      type: activeContentTab.value, title: form.value.title,
       subtitle: form.value.subtitle || null, content: form.value.content || null,
       image_url: form.value.image_url || null, sort_order: Number(form.value.sort_order),
       published: form.value.published ? 1 : 0
@@ -94,23 +119,41 @@ async function handleDelete(c: ContentItem) {
   catch (err: unknown) { errorMsg.value = err instanceof Error ? err.message : '删除失败'; }
 }
 
-onMounted(loadList);
-=======
-/**
- * @file 内容管理后台（成员D · 代搭）
- * @description 管理 POI 和 路线：列表 / 新增 / 编辑 / 上下架 / 删除
- *              当前不校验 JWT（等成员C auth 中间件落地后套上），用 mockLogin('admin') 即可进入
- * @author 第八组（成员D）
- * @date 2026-11-03
- */
-import { ref, onMounted } from 'vue';
-import { showToast, showConfirmDialog } from 'vant';
-import { fetchPois, createPoi, updatePoi, deletePoi, type PoiItem } from '../../api/poi';
-import { fetchRoutesAdmin, createRoute, updateRoute, deleteRoute, type RouteAdminItem } from '../../api/routeAdmin';
+function triggerUpload() { fileInput.value?.click(); }
 
-const activeTab = ref<'poi' | 'route'>('poi');
+async function handleFileChange(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  if (!allowed.includes(file.type)) {
+    errorMsg.value = `不支持的图片类型：${file.type}`;
+    input.value = '';
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    errorMsg.value = '图片不能超过 5MB';
+    input.value = '';
+    return;
+  }
+  uploading.value = true;
+  errorMsg.value = '';
+  try {
+    const result = await uploadImage(file);
+    form.value.image_url = result.url;
+  } catch (err: unknown) {
+    errorMsg.value = err instanceof Error ? err.message : '上传失败';
+  } finally {
+    uploading.value = false;
+    input.value = '';
+  }
+}
 
-// ========== POI ==========
+// ================== Tab 2：POI / 路线 CRUD（成员D）==================
+type AdminTab = 'poi' | 'route';
+const adminTab = ref<AdminTab>('poi');
+
+// --- POI ---
 const poiList = ref<PoiItem[]>([]);
 const showAllPoi = ref(true);
 const poiDialog = ref(false);
@@ -161,15 +204,12 @@ async function removePoi(p: PoiItem) {
   try { await deletePoi(p.id); showToast('已删除'); await loadPois(); } catch (err) { showToast((err as Error).message); }
 }
 
-// ========== Route ==========
+// --- Route ---
 const routeList = ref<RouteAdminItem[]>([]);
 const showAllRoute = ref(true);
 const routeDialog = ref(false);
 const editingRoute = ref<RouteAdminItem | null>(null);
 const routeForm = ref<Partial<RouteAdminItem>>({ name: '', theme: 'general', description: '', estimated_minutes: 60, status: 1 });
-
-// THEME_OPTIONS reserved for future use (currently free text input)
-// const THEME_OPTIONS = ...;
 
 async function loadRoutes() {
   try { routeList.value = await fetchRoutesAdmin(showAllRoute.value); } catch (err) { showToast((err as Error).message); }
@@ -207,182 +247,221 @@ async function removeRoute(r: RouteAdminItem) {
   try { await deleteRoute(r.id); showToast('已删除'); await loadRoutes(); } catch (err) { showToast((err as Error).message); }
 }
 
-// refresh 函数预留，暂未调用
-
-onMounted(async () => { await loadPois(); await loadRoutes(); });
->>>>>>> origin/feature/analytics
+onMounted(async () => {
+  await loadList();    // C 的内容管理
+  await loadPois();    // D 的 POI
+  await loadRoutes();  // D 的路线
+});
 </script>
 
 <template>
   <div class="content-admin">
-<<<<<<< HEAD
-    <h1>内容管理</h1>
-    <div class="tabs">
-      <button
-        v-for="t in TABS" :key="t.key"
-        :class="{ active: activeTab === t.key }"
-        @click="switchTab(t.key)"
-      >{{ t.label }}</button>
+    <!-- 顶层：两个大 tab -->
+    <div class="top-tabs">
+      <button :class="{ active: topTab === 'content' }" @click="topTab = 'content'">📰 内容管理</button>
+      <button :class="{ active: topTab === 'poi' }" @click="topTab = 'poi'">🗺️ POI / 路线</button>
     </div>
 
-    <div class="toolbar">
-      <button class="primary" @click="openNew">+ 新增</button>
-      <button @click="loadList" :disabled="loading">{{ loading ? '加载中...' : '刷新' }}</button>
-    </div>
+    <!-- ============ Tab 1：内容管理（成员C）============ -->
+    <section v-if="topTab === 'content'">
+      <div class="sub-tabs">
+        <button
+          v-for="t in CONTENT_TABS" :key="t.key"
+          :class="{ active: activeContentTab === t.key }"
+          @click="switchTab(t.key)"
+        >{{ t.label }}</button>
+      </div>
 
-    <p v-if="errorMsg" class="error">{{ errorMsg }}</p>
+      <div class="toolbar">
+        <button class="primary" @click="openNew">+ 新增</button>
+        <button @click="loadList" :disabled="loading">{{ loading ? '加载中...' : '刷新' }}</button>
+      </div>
 
-    <table v-if="list.length" class="content-table">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>标题</th>
-          <th>排序</th>
-          <th>状态</th>
-          <th>更新时间</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="c in list" :key="c.id">
-          <td>{{ c.id }}</td>
-          <td>
-            <div class="title">{{ c.title }}</div>
-            <div v-if="c.subtitle" class="sub">{{ c.subtitle }}</div>
-          </td>
-          <td>{{ c.sort_order }}</td>
-          <td>
-            <span :class="c.published ? 'tag ok' : 'tag off'">{{ c.published ? '已发布' : '未发布' }}</span>
-          </td>
-          <td>{{ c.updated_at }}</td>
-          <td>
-            <button @click="openEdit(c)">编辑</button>
-            <button @click="handleToggle(c)">{{ c.published ? '下架' : '上架' }}</button>
-            <button class="danger" @click="handleDelete(c)">删除</button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-    <p v-else-if="!loading" class="empty">暂无 {{ TABS.find(t => t.key === activeTab)?.label }} 内容，点「+ 新增」创建</p>
+      <p v-if="errorMsg" class="error">{{ errorMsg }}</p>
 
-    <!-- 弹窗 -->
-    <div v-if="showForm" class="modal-mask" @click.self="showForm = false">
-      <div class="modal">
-        <h3>{{ editing ? '编辑' : '新增' }}「{{ TABS.find(t => t.key === activeTab)?.label }}」</h3>
-        <label>标题 * <input v-model="form.title" /></label>
-        <label>副标题 <input v-model="form.subtitle" /></label>
-        <label>主内容 <textarea v-model="form.content" rows="3"></textarea></label>
-        <label>图片 URL <input v-model="form.image_url" placeholder="可选" /></label>
-        <div class="row">
-          <label>排序值 <input type="number" v-model.number="form.sort_order" /></label>
-          <label class="check">
-            <input type="checkbox" v-model="form.published" /> 发布
+      <table v-if="list.length" class="content-table">
+        <thead>
+          <tr>
+            <th>ID</th><th>标题</th><th>排序</th><th>状态</th><th>更新时间</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="c in list" :key="c.id">
+            <td>{{ c.id }}</td>
+            <td>
+              <div class="title">{{ c.title }}</div>
+              <div v-if="c.subtitle" class="sub">{{ c.subtitle }}</div>
+            </td>
+            <td>{{ c.sort_order }}</td>
+            <td>
+              <span :class="c.published ? 'tag ok' : 'tag off'">{{ c.published ? '已发布' : '未发布' }}</span>
+            </td>
+            <td>{{ c.updated_at }}</td>
+            <td>
+              <button @click="openEdit(c)">编辑</button>
+              <button @click="handleToggle(c)">{{ c.published ? '下架' : '上架' }}</button>
+              <button class="danger" @click="handleDelete(c)">删除</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-else-if="!loading" class="empty">暂无 {{ CONTENT_TABS.find(t => t.key === activeContentTab)?.label }} 内容</p>
+
+      <!-- 弹窗 -->
+      <div v-if="showForm" class="modal-mask" @click.self="showForm = false">
+        <div class="modal">
+          <h3>{{ editing ? '编辑' : '新增' }}「{{ CONTENT_TABS.find(t => t.key === activeContentTab)?.label }}」</h3>
+          <label>标题 * <input v-model="form.title" /></label>
+          <label>副标题 <input v-model="form.subtitle" /></label>
+          <label>主内容 <textarea v-model="form.content" rows="3"></textarea></label>
+          <label>
+            图片
+            <div class="image-field">
+              <input v-model="form.image_url" placeholder="/uploads/xxx.jpg 或 https://..." />
+              <button type="button" class="upload-btn" :disabled="uploading" @click="triggerUpload">
+                {{ uploading ? '上传中...' : '上传图片' }}
+              </button>
+              <input ref="fileInput" type="file" accept="image/jpeg,image/png,image/webp,image/gif" style="display: none" @change="handleFileChange" />
+            </div>
           </label>
+          <div v-if="form.image_url" class="image-preview">
+            <img :src="resolveImageUrl(form.image_url)" alt="预览" />
+            <button type="button" class="clear-btn" @click="form.image_url = ''">移除</button>
+          </div>
+          <div class="row">
+            <label>排序值 <input type="number" v-model.number="form.sort_order" /></label>
+            <label class="check"><input type="checkbox" v-model="form.published" /> 发布</label>
+          </div>
+          <label>扩展字段 (JSON 可选)<textarea v-model="form.extra_json" rows="2" placeholder='{"key":"val"}'></textarea></label>
+          <div class="modal-actions">
+            <button @click="showForm = false">取消</button>
+            <button class="primary" @click="handleSave">保存</button>
+          </div>
         </div>
-        <label>扩展字段 (JSON 可选)
-          <textarea v-model="form.extra_json" rows="2" placeholder='{"key":"val"}'></textarea>
-        </label>
-        <div class="modal-actions">
-          <button @click="showForm = false">取消</button>
-          <button class="primary" @click="handleSave">保存</button>
+      </div>
+    </section>
+
+    <!-- ============ Tab 2：POI / 路线 CRUD（成员D）============ -->
+    <section v-if="topTab === 'poi'" class="poi-section">
+      <div class="sub-tabs">
+        <button :class="{ active: adminTab === 'poi' }" @click="adminTab = 'poi'">景点 POI</button>
+        <button :class="{ active: adminTab === 'route' }" @click="adminTab = 'route'">游览路线</button>
+      </div>
+
+      <!-- POI -->
+      <div v-if="adminTab === 'poi'" class="list-wrap">
+        <div class="toolbar">
+          <button class="primary" @click="openNewPoi">+ 新增景点</button>
+          <label class="check"><input type="checkbox" v-model="showAllPoi" @change="loadPois" /> 显示已禁用</label>
+          <button @click="loadPois">刷新</button>
+        </div>
+        <table v-if="poiList.length" class="content-table">
+          <thead><tr><th>ID</th><th>名称</th><th>分类</th><th>位置</th><th>状态</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr v-for="p in poiList" :key="p.id">
+              <td>{{ p.id }}</td>
+              <td>{{ p.name }}</td>
+              <td>{{ p.category }}</td>
+              <td>{{ p.location || '-' }}</td>
+              <td><span :class="p.status === 1 ? 'tag ok' : 'tag off'">{{ p.status === 1 ? '启用' : '禁用' }}</span></td>
+              <td>
+                <button @click="openEditPoi(p)">编辑</button>
+                <button @click="togglePoiStatus(p)">{{ p.status === 1 ? '禁用' : '启用' }}</button>
+                <button class="danger" @click="removePoi(p)">删除</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-else class="empty">暂无 POI 数据</p>
+
+        <!-- POI 弹窗 -->
+        <div v-if="poiDialog" class="modal-mask" @click.self="poiDialog = false">
+          <div class="modal">
+            <h3>{{ editingPoi ? '编辑' : '新增' }}景点</h3>
+            <label>名称 * <input v-model="poiForm.name" /></label>
+            <label>分类
+              <select v-model="poiForm.category">
+                <option v-for="o in CATEGORY_OPTIONS" :key="o.value" :value="o.value">{{ o.text }}</option>
+              </select>
+            </label>
+            <label>位置 <input v-model="(poiForm.location ?? '') as string" placeholder="如：西湖区龙井路1号" /></label>
+            <label>简介 <textarea v-model="(poiForm.description ?? '') as string" rows="3"></textarea></label>
+            <div class="modal-actions">
+              <button @click="poiDialog = false">取消</button>
+              <button class="primary" @click="savePoi">保存</button>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-=======
-    <van-sticky>
-      <van-tabs v-model:active="activeTab" sticky>
-        <van-tab title="景点 POI" name="poi" />
-        <van-tab title="游览路线" name="route" />
-      </van-tabs>
-    </van-sticky>
 
-    <!-- ============ POI 列表 ============ -->
-    <div v-if="activeTab === 'poi'" class="list-wrap">
-      <div class="toolbar">
-        <van-button size="small" type="primary" @click="openNewPoi">+ 新增景点</van-button>
-        <van-checkbox v-model="showAllPoi" shape="square" @change="loadPois">显示已禁用</van-checkbox>
-        <van-button size="small" plain @click="loadPois">刷新</van-button>
-      </div>
-      <van-cell-group inset>
-        <van-cell v-for="p in poiList" :key="p.id" :title="p.name" :label="`${p.category}${p.location ? ' · ' + p.location : ''}`">
-          <template #right-icon>
-            <div class="row-actions">
-              <van-tag :type="p.status === 1 ? 'success' : 'default'" size="medium">{{ p.status === 1 ? '启用' : '禁用' }}</van-tag>
-              <van-button size="mini" type="primary" plain @click="openEditPoi(p)">编辑</van-button>
-              <van-button size="mini" :type="p.status === 1 ? 'warning' : 'success'" plain @click="togglePoiStatus(p)">{{ p.status === 1 ? '禁用' : '启用' }}</van-button>
-              <van-button size="mini" type="danger" plain @click="removePoi(p)">删除</van-button>
+      <!-- Route -->
+      <div v-if="adminTab === 'route'" class="list-wrap">
+        <div class="toolbar">
+          <button class="primary" @click="openNewRoute">+ 新增路线</button>
+          <label class="check"><input type="checkbox" v-model="showAllRoute" @change="loadRoutes" /> 显示已禁用</label>
+          <button @click="loadRoutes">刷新</button>
+        </div>
+        <table v-if="routeList.length" class="content-table">
+          <thead><tr><th>ID</th><th>名称</th><th>主题</th><th>时长</th><th>POI 数</th><th>状态</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr v-for="r in routeList" :key="r.id">
+              <td>{{ r.id }}</td>
+              <td>{{ r.name }}</td>
+              <td>{{ r.theme }}</td>
+              <td>{{ r.estimated_minutes }} 分钟</td>
+              <td>{{ r.poi_count ?? 0 }}</td>
+              <td><span :class="r.status === 1 ? 'tag ok' : 'tag off'">{{ r.status === 1 ? '启用' : '禁用' }}</span></td>
+              <td>
+                <button @click="openEditRoute(r)">编辑</button>
+                <button @click="toggleRouteStatus(r)">{{ r.status === 1 ? '禁用' : '启用' }}</button>
+                <button class="danger" @click="removeRoute(r)">删除</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-else class="empty">暂无路线数据</p>
+
+        <!-- Route 弹窗 -->
+        <div v-if="routeDialog" class="modal-mask" @click.self="routeDialog = false">
+          <div class="modal">
+            <h3>{{ editingRoute ? '编辑' : '新增' }}路线</h3>
+            <label>名称 * <input v-model="routeForm.name" /></label>
+            <label>主题 <input v-model="routeForm.theme" /></label>
+            <label>预计分钟数 <input type="number" v-model.number="routeForm.estimated_minutes" /></label>
+            <label>简介 <textarea v-model="(routeForm.description ?? '') as string" rows="2"></textarea></label>
+            <div class="modal-actions">
+              <button @click="routeDialog = false">取消</button>
+              <button class="primary" @click="saveRoute">保存</button>
             </div>
-          </template>
-        </van-cell>
-        <van-empty v-if="poiList.length === 0" description="暂无数据，点左上角新增" />
-      </van-cell-group>
-    </div>
-
-    <!-- ============ 路线列表 ============ -->
-    <div v-if="activeTab === 'route'" class="list-wrap">
-      <div class="toolbar">
-        <van-button size="small" type="primary" @click="openNewRoute">+ 新增路线</van-button>
-        <van-checkbox v-model="showAllRoute" shape="square" @change="loadRoutes">显示已禁用</van-checkbox>
-        <van-button size="small" plain @click="loadRoutes">刷新</van-button>
+          </div>
+        </div>
       </div>
-      <van-cell-group inset>
-        <van-cell v-for="r in routeList" :key="r.id" :title="r.name" :label="`${r.theme} · ${r.estimated_minutes}分钟 · ${r.poi_count}个景点`">
-          <template #right-icon>
-            <div class="row-actions">
-              <van-tag :type="r.status === 1 ? 'success' : 'default'" size="medium">{{ r.status === 1 ? '启用' : '禁用' }}</van-tag>
-              <van-button size="mini" type="primary" plain @click="openEditRoute(r)">编辑</van-button>
-              <van-button size="mini" :type="r.status === 1 ? 'warning' : 'success'" plain @click="toggleRouteStatus(r)">{{ r.status === 1 ? '禁用' : '启用' }}</van-button>
-              <van-button size="mini" type="danger" plain @click="removeRoute(r)">删除</van-button>
-            </div>
-          </template>
-        </van-cell>
-        <van-empty v-if="routeList.length === 0" description="暂无数据，点左上角新增" />
-      </van-cell-group>
-    </div>
-
-    <!-- ============ POI 编辑弹窗 ============ -->
-    <van-dialog v-model:show="poiDialog" title="编辑景点" show-cancel-button @confirm="savePoi">
-      <div class="form-grid">
-        <van-field v-model="poiForm.name" label="名称" placeholder="必填" />
-        <van-field v-model="poiForm.category" label="分类" is-link readonly :placeholder="poiForm.category">
-          <template #input>
-            <van-picker
-              :columns="CATEGORY_OPTIONS"
-              :show="false"
-              @confirm="(v: { selectedValues: string[] }) => (poiForm.category = v.selectedValues[0])"
-            />
-          </template>
-        </van-field>
-        <van-field v-model="(poiForm.location ?? '') as string" label="位置" placeholder="可选" />
-        <van-field v-model="(poiForm.description ?? '') as string" label="简介" type="textarea" rows="3" autosize placeholder="可选" />
-      </div>
-    </van-dialog>
-
-    <!-- ============ 路线编辑弹窗 ============ -->
-    <van-dialog v-model:show="routeDialog" title="编辑路线" show-cancel-button @confirm="saveRoute">
-      <div class="form-grid">
-        <van-field v-model="routeForm.name" label="名称" placeholder="必填" />
-        <van-field v-model="routeForm.theme" label="主题" />
-        <van-field v-model.number="routeForm.estimated_minutes" label="预计分钟数" type="number" />
-        <van-field v-model="(routeForm.description ?? '') as string" label="简介" type="textarea" rows="2" autosize placeholder="可选" />
-      </div>
-    </van-dialog>
->>>>>>> origin/feature/analytics
+    </section>
   </div>
 </template>
 
 <style scoped>
-<<<<<<< HEAD
-.content-admin h1 { margin: 0 0 16px; font-size: 20px; color: #333; }
-.tabs { display: flex; gap: 4px; border-bottom: 2px solid #eee; margin-bottom: 16px; }
-.tabs button {
-  padding: 10px 18px; background: none; border: none; cursor: pointer;
-  font-size: 14px; color: #666; border-bottom: 2px solid transparent; margin-bottom: -2px;
+/* ========== 顶层 tab ========== */
+.top-tabs { display: flex; gap: 0; border-bottom: 2px solid #eee; margin-bottom: 16px; }
+.top-tabs button {
+  padding: 12px 24px; background: none; border: none; cursor: pointer;
+  font-size: 15px; color: #888; border-bottom: 2px solid transparent; margin-bottom: -2px;
 }
-.tabs button.active { color: #667eea; border-bottom-color: #667eea; font-weight: 600; }
-.toolbar { display: flex; gap: 10px; margin-bottom: 12px; }
+.top-tabs button.active { color: #667eea; border-bottom-color: #667eea; font-weight: 600; }
+
+/* ========== C 的子 tab ========== */
+.sub-tabs { display: flex; gap: 4px; border-bottom: 1px solid #eee; margin-bottom: 16px; flex-wrap: wrap; }
+.sub-tabs button {
+  padding: 8px 16px; background: none; border: none; cursor: pointer;
+  font-size: 13px; color: #888; border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.sub-tabs button.active { color: #667eea; border-bottom-color: #667eea; font-weight: 500; }
+
+/* ========== 通用 ========== */
+.toolbar { display: flex; gap: 10px; margin-bottom: 12px; align-items: center; }
 .toolbar button { padding: 7px 16px; border: 1px solid #ddd; background: #fff; border-radius: 4px; cursor: pointer; }
 .toolbar .primary { background: #667eea; color: #fff; border-color: #667eea; }
+.toolbar .check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #666; cursor: pointer; }
 .error { background: #fff0f0; color: #d33; padding: 8px 12px; border-radius: 4px; font-size: 13px; margin: 8px 0; }
 .content-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 6px; overflow: hidden; }
 .content-table th, .content-table td { padding: 11px 14px; text-align: left; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
@@ -396,11 +475,13 @@ onMounted(async () => { await loadPois(); await loadRoutes(); });
 .tag.ok { background: #e6f7e6; color: #2a7; }
 .tag.off { background: #f5f5f5; color: #999; }
 .empty { text-align: center; color: #aaa; padding: 40px 0; }
+
+/* ========== 弹窗 ========== */
 .modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; }
 .modal { background: #fff; border-radius: 10px; padding: 24px; width: 520px; max-width: 92vw; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-height: 88vh; overflow-y: auto; }
 .modal h3 { margin: 0 0 16px; }
 .modal label { display: block; margin-bottom: 12px; font-size: 13px; color: #555; }
-.modal input, .modal textarea { width: 100%; padding: 8px 10px; margin-top: 4px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; box-sizing: border-box; }
+.modal input, .modal select, .modal textarea { width: 100%; padding: 8px 10px; margin-top: 4px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; box-sizing: border-box; }
 .modal .row { display: flex; gap: 12px; }
 .modal .row label { flex: 1; }
 .modal .check { display: flex; align-items: center; gap: 6px; margin-top: 22px; }
@@ -408,15 +489,17 @@ onMounted(async () => { await loadPois(); await loadRoutes(); });
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 .modal-actions button { padding: 8px 18px; border: 1px solid #ddd; background: #fff; border-radius: 5px; cursor: pointer; }
 .modal-actions .primary { background: #667eea; color: #fff; border-color: #667eea; }
-=======
-.content-admin { padding-bottom: 40px; }
-.toolbar {
-  display: flex; align-items: center; gap: 10px;
-  padding: 12px 14px 8px; background: #fff;
-  border-bottom: 1px solid #f2f3f5;
-}
-.list-wrap { padding-top: 4px; }
-.row-actions { display: flex; gap: 4px; align-items: center; }
-.form-grid { padding: 8px 0; }
->>>>>>> origin/feature/analytics
+
+/* ========== 图片上传（C 新增）========== */
+.image-field { display: flex; gap: 8px; margin-top: 4px; }
+.image-field input { flex: 1; margin-top: 0; }
+.upload-btn { padding: 0 14px; border: 1px solid #667eea; background: #fff; color: #667eea; border-radius: 5px; cursor: pointer; white-space: nowrap; }
+.upload-btn:hover:not(:disabled) { background: #667eea; color: #fff; }
+.upload-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.image-preview { margin: -6px 0 12px; display: flex; align-items: center; gap: 10px; }
+.image-preview img { max-width: 200px; max-height: 100px; border-radius: 6px; border: 1px solid #eee; object-fit: cover; }
+.clear-btn { padding: 4px 10px; border: 1px solid #ff8a8a; color: #d33; background: #fff; border-radius: 4px; cursor: pointer; font-size: 12px; }
+.clear-btn:hover { background: #fff0f0; }
+
+.poi-section .list-wrap { padding-top: 8px; }
 </style>
