@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@langchain/textsplitters": "^1.0.2",
+<<<<<<< HEAD
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^13.0.3",
     "cors": "^2.8.5",
@@ -24,13 +25,25 @@
     "pdf-parse": "^2.4.5",
     "pino": "^10.4.0",
     "pino-pretty": "^13.2.0"
+=======
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.1",
+    "express": "^5.1.0",
+    "mammoth": "^1.13.0",
+    "multer": "^2.4.0",
+    "pdf-parse": "^2.4.5"
+>>>>>>> origin/feature/kb-admin
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^9.6.0",
     "@types/cors": "^2.8.19",
+<<<<<<< HEAD
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.10",
+=======
+    "@types/express": "^5.0.3",
+>>>>>>> origin/feature/kb-admin
     "@types/multer": "^2.3.0",
     "@types/node": "^24.13.3",
     "tsx": "^4.20.5",
