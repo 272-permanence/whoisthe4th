@@ -11,6 +11,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    Avatar: typeof import('./src/components/common/Avatar.vue')['default']
     ConversationList: typeof import('./src/components/interaction/ConversationList.vue')['default']
     DigitalHumanAvatar: typeof import('./src/components/interaction/DigitalHumanAvatar.vue')['default']
     HelloWorld: typeof import('./src/components/HelloWorld.vue')['default']
