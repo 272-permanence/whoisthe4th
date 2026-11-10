@@ -42,7 +42,9 @@ export const operationLogMiddleware = router.use((req, res, next) => {
 
     // 3. 收集日志字段
     const traceId = (req as Request & { traceId?: string }).traceId ?? 'no-trace-id';
-    const userId = (req as Request & { user?: { id?: number } }).user?.id ?? null;
+    // C 的 JwtPayload 用 uid，兼容部分路由挂载的 user.id
+    const authUser = (req as Request & { user?: { uid?: number; id?: number } }).user;
+    const userId = authUser?.uid ?? authUser?.id ?? null;
 
     const apiPath = req.path;
     const httpMethod = req.method;

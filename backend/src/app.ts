@@ -46,6 +46,8 @@ import { startLogQueueConsumer, stopLogQueueConsumer } from './services/logQueue
 import { initRedis, closeRedis } from './common/redis.js';
 import { traceIdMiddleware } from './middleware/traceId.js';
 import { authMiddleware } from './middleware/auth.js';
+import { operationLogMiddleware } from './middleware/operationLog.js';
+import { logError } from './services/errorLogger.js';
 
 const log = createLogger('app');
 const app = express();
@@ -64,6 +66,10 @@ app.use(traceIdMiddleware);
 
 // 全局 JWT 解析：有合法 token 自动填充 req.user，无 token 放行（强制登录由各路由 requireAuth 完成）
 app.use(authMiddleware);
+
+// 操作日志中间件：在 traceId 与 req.user 就绪后、业务路由之前挂载，
+// 自动记录所有 /api/v1/* 请求（登录/日志接口自身已跳过），异步落库不阻塞响应。
+app.use(operationLogMiddleware);
 
 // ========== 静态托管：用户端可直接访问后台上传的图片 ==========
 app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d' }));
@@ -100,7 +106,10 @@ app.get('/health', (_req, res) => {
 });
 
 // ========== 统一错误处理（必须在所有路由之后）==========
-app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+app.use((error: unknown, req: Request, res: Response, _next: NextFunction) => {
+  // 统一异常控制：所有未捕获异常都进 errorLogger（Pino 文件 + error_log 表双写，异步不阻塞）
+  void logError(error, req);
+
   if (error instanceof HttpError) {
     res.status(error.status).json({ code: error.code, message: error.message });
     return;
@@ -110,7 +119,7 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     res.status(400).json({ code, message: `音频上传失败: ${error.message}` });
     return;
   }
-  console.error('[http] 未处理异常: %s', error);
+  log.ERROR(`未处理异常: ${String(error)}`);
   res.status(500).json({ code: ErrorCodeEnum.INTERNAL_ERROR, message: '服务器内部错误' });
 });
 
