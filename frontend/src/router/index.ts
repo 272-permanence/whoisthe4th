@@ -26,11 +26,11 @@ const routes = [
         component: () => import('../views/mobile/HomePage.vue'),
         meta: { title: '首页' },
       },
-      // AI 导览 Tab → 复用成员A 已有的语音交互页
+      // AI 导览 Tab → 移动端专属语音聊天页（成员A 新建 MobileChat.vue）
       {
         path: 'interaction',
         name: 'mobile-interaction',
-        component: () => import('../views/InteractionView.vue'),
+        component: () => import('../views/mobile/MobileChat.vue'),
         meta: { title: 'AI 导览' },
       },
       {
@@ -90,6 +90,12 @@ const routes = [
     name: 'qa-panel',
     component: () => import('../views/QaPanel.vue'),
     meta: { title: '智能问答' },
+  },
+  {
+    path: '/interact',
+    name: 'pc-interaction',
+    component: () => import('../views/InteractionView.vue'),
+    meta: { title: 'AI 语音导览' },
   },
   {
     path: '/dashboard',
