@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * @file 数据运营大屏
+ * @file 数据运营大屏（浅色青绿主题）
  * @author 第八组
  * @date 2026-10-15
  * @description 实时展示服务人次、热门问答、情感分布、问答趋势
@@ -21,10 +21,8 @@ let closeStream: (() => void) | null = null;
 
 onMounted(async () => {
   initCharts();
-  // 初次加载数据
   const stats = await getStats();
   updateDashboard(stats);
-  // 建立 SSE 实时连接
   closeStream = connectStatsStream(updateDashboard);
   window.addEventListener('resize', resizeCharts);
 });
@@ -37,18 +35,12 @@ onBeforeUnmount(() => {
   trendChart.value?.dispose();
 });
 
-/**
- * 初始化三个图表实例
- */
 function initCharts() {
   sentimentChart.value = echarts.init(document.getElementById('sentiment-chart')!);
   hotChart.value = echarts.init(document.getElementById('hot-chart')!);
   trendChart.value = echarts.init(document.getElementById('trend-chart')!);
 }
 
-/**
- * 更新大屏数据
- */
 function updateDashboard(stats: AnalyticsStats) {
   totalVisits.value = stats.totalVisits;
   todayVisits.value = stats.todayVisits;
@@ -59,69 +51,60 @@ function updateDashboard(stats: AnalyticsStats) {
   updateTrendChart(stats.hourlyTrend);
 }
 
-/**
- * 情感分布饼图
- */
 function updateSentimentChart(dist: AnalyticsStats['sentimentDist']) {
   sentimentChart.value?.setOption({
-    title: { text: '用户情感分布', left: 'center', textStyle: { color: '#fff', fontSize: 16 } },
+    title: { text: '用户情感分布', left: 'center', textStyle: { color: '#1f2937', fontSize: 16, fontWeight: 600 } },
     tooltip: { trigger: 'item' },
-    legend: { bottom: 0, textStyle: { color: '#ccc' } },
+    legend: { bottom: 0, textStyle: { color: '#6b7280' } },
     series: [{
       type: 'pie',
       radius: ['40%', '70%'],
-      label: { color: '#fff' },
+      label: { color: '#374151' },
       data: [
-        { value: dist.positive, name: '正面', itemStyle: { color: '#52c41a' } },
-        { value: dist.neutral, name: '中性', itemStyle: { color: '#1890ff' } },
-        { value: dist.negative, name: '负面', itemStyle: { color: '#ff4d4f' } }
+        { value: dist.positive, name: '正面', itemStyle: { color: '#10b981' } },
+        { value: dist.neutral, name: '中性', itemStyle: { color: '#0f766e' } },
+        { value: dist.negative, name: '负面', itemStyle: { color: '#ef4444' } }
       ]
     }]
   });
 }
 
-/**
- * 热门问答 TOP10 柱状图
- */
 function updateHotChart(questions: AnalyticsStats['hotQuestions']) {
   const names = questions.map(q => q.message.length > 12 ? q.message.slice(0, 12) + '...' : q.message);
   const counts = questions.map(q => q.count);
 
   hotChart.value?.setOption({
-    title: { text: '热门问答 TOP10', left: 'center', textStyle: { color: '#fff', fontSize: 16 } },
+    title: { text: '热门问答 TOP10', left: 'center', textStyle: { color: '#1f2937', fontSize: 16, fontWeight: 600 } },
     tooltip: { trigger: 'axis' },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: names, axisLabel: { color: '#ccc', interval: 0, rotate: 30 } },
-    yAxis: { type: 'value', axisLabel: { color: '#ccc' } },
+    xAxis: { type: 'category', data: names, axisLabel: { color: '#6b7280', interval: 0, rotate: 30 } },
+    yAxis: { type: 'value', axisLabel: { color: '#6b7280' } },
     series: [{
       type: 'bar',
       data: counts,
-      itemStyle: { color: '#36cfc9' },
+      itemStyle: { color: '#0f766e', borderRadius: [4, 4, 0, 0] },
       barWidth: '50%'
     }]
   });
 }
 
-/**
- * 近 24 小时问答趋势折线图
- */
 function updateTrendChart(trend: AnalyticsStats['hourlyTrend']) {
   const hours = trend.map(t => t.hour);
   const counts = trend.map(t => t.count);
 
   trendChart.value?.setOption({
-    title: { text: '近 24 小时问答量趋势', left: 'center', textStyle: { color: '#fff', fontSize: 16 } },
+    title: { text: '近 24 小时问答量趋势', left: 'center', textStyle: { color: '#1f2937', fontSize: 16, fontWeight: 600 } },
     tooltip: { trigger: 'axis' },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: hours, axisLabel: { color: '#ccc' } },
-    yAxis: { type: 'value', axisLabel: { color: '#ccc' } },
+    xAxis: { type: 'category', data: hours, axisLabel: { color: '#6b7280' } },
+    yAxis: { type: 'value', axisLabel: { color: '#6b7280' } },
     series: [{
       type: 'line',
       data: counts,
       smooth: true,
-      areaStyle: { color: 'rgba(54, 207, 201, 0.2)' },
-      lineStyle: { color: '#36cfc9', width: 2 },
-      itemStyle: { color: '#36cfc9' }
+      areaStyle: { color: 'rgba(15, 118, 110, 0.12)' },
+      lineStyle: { color: '#0f766e', width: 2.5 },
+      itemStyle: { color: '#0f766e' }
     }]
   });
 }
@@ -137,31 +120,34 @@ function resizeCharts() {
   <div class="dashboard">
     <!-- 顶部标题栏 -->
     <header class="dashboard-header">
-      <h1>景区导览 AI 数字人 · 数据运营大屏</h1>
+      <div>
+        <h1>数据运营大屏</h1>
+        <p class="dashboard-sub">景区导览 AI · 实时数据监控</p>
+      </div>
       <span class="update-time">更新时间：{{ updatedAt }}</span>
     </header>
 
     <!-- 核心指标卡片 -->
     <section class="stat-cards">
-      <div class="card">
+      <div class="stat-card">
         <div class="card-label">累计服务人次</div>
-        <div class="card-value">{{ totalVisits.toLocaleString() }}</div>
+        <div class="card-value nums">{{ totalVisits.toLocaleString() }}</div>
       </div>
-      <div class="card">
+      <div class="stat-card">
         <div class="card-label">今日服务人次</div>
-        <div class="card-value">{{ todayVisits.toLocaleString() }}</div>
+        <div class="card-value nums">{{ todayVisits.toLocaleString() }}</div>
       </div>
     </section>
 
     <!-- 图表区 -->
     <section class="charts">
-      <div class="chart-box">
+      <div class="chart-card">
         <div id="sentiment-chart" class="chart"></div>
       </div>
-      <div class="chart-box">
+      <div class="chart-card">
         <div id="hot-chart" class="chart"></div>
       </div>
-      <div class="chart-box full-width">
+      <div class="chart-card full-width">
         <div id="trend-chart" class="chart"></div>
       </div>
     </section>
@@ -171,87 +157,105 @@ function resizeCharts() {
 <style scoped>
 .dashboard {
   min-height: 100vh;
-  background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
-  padding: 24px;
-  color: #fff;
+  background: var(--color-bg);
+  padding: var(--space-8) var(--space-6);
+  font-family: var(--font-sans);
+  color: var(--color-text);
 }
 
 .dashboard-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
+  align-items: flex-end;
+  margin-bottom: var(--space-6);
 }
 
 .dashboard-header h1 {
   margin: 0;
-  font-size: 24px;
-  letter-spacing: 2px;
-  color: #fff;
+  font-family: var(--font-serif);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: 0.04em;
+}
+
+.dashboard-sub {
+  margin: 4px 0 0;
+  font-size: var(--text-body);
+  color: var(--color-text-2);
 }
 
 .update-time {
-  color: #8c8c8c;
-  font-size: 14px;
+  color: var(--color-text-3);
+  font-size: var(--text-caption);
+  font-variant-numeric: tabular-nums;
 }
 
 .stat-cards {
   display: flex;
-  gap: 24px;
-  margin-bottom: 24px;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
 }
 
-.card {
+.stat-card {
   flex: 1;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
-  padding: 24px;
-  text-align: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-5) var(--space-6);
+  box-shadow: var(--shadow-sm);
 }
 
 .card-label {
-  font-size: 16px;
-  color: #bfbfbf;
-  margin-bottom: 12px;
+  font-size: var(--text-caption);
+  color: var(--color-text-2);
+  margin-bottom: var(--space-2);
 }
 
 .card-value {
-  font-size: 42px;
-  font-weight: bold;
-  color: #36cfc9;
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--color-primary);
+  letter-spacing: 0.02em;
+  line-height: 1.2;
 }
 
 .charts {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 24px;
+  gap: var(--space-4);
 }
 
-.chart-box {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 16px;
+.chart-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-sm);
+}
+
+.chart-card.full-width {
+  grid-column: 1 / -1;
 }
 
 .chart {
   width: 100%;
-  height: 320px;
+  height: 300px;
 }
 
-.full-width {
-  grid-column: span 2;
-}
-</style>
-
-<style>
-/* 大屏页面需要铺满浏览器宽度，覆盖全局 #app 的 1126px 固定宽度限制 */
-#app:has(.dashboard) {
-  width: 100%;
-  max-width: 100%;
-  margin: 0;
-  border-inline: none;
-  text-align: left;
+@media (max-width: 768px) {
+  .dashboard-header {
+    flex-direction: column;
+    gap: var(--space-2);
+    align-items: flex-start;
+  }
+  .stat-cards {
+    flex-direction: column;
+  }
+  .charts {
+    grid-template-columns: 1fr;
+  }
+  .dashboard { padding: var(--space-6) var(--space-4); }
+  .dashboard-header h1 { font-size: 22px; }
 }
 </style>

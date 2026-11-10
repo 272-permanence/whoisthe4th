@@ -46,6 +46,11 @@ function initTables(database: Database.Database): void {
       role TEXT NOT NULL DEFAULT 'user',
       nickname TEXT,
       status TEXT NOT NULL DEFAULT 'active',
+      email TEXT,
+      phone TEXT,
+      wechat_openid TEXT,
+      sso_uid TEXT,
+      cert_fingerprint TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
@@ -91,6 +96,7 @@ function migrateSchema(database: Database.Database): void {
 
   // ---------- 统一身份认证：第三方身份标识（均可为空） ----------
   addColumn(database, 'admin_user', 'email', 'TEXT');
+  addColumn(database, 'admin_user', 'phone', 'TEXT');
   addColumn(database, 'admin_user', 'wechat_openid', 'TEXT');
   addColumn(database, 'admin_user', 'sso_uid', 'TEXT');
   addColumn(database, 'admin_user', 'cert_fingerprint', 'TEXT');
@@ -98,6 +104,7 @@ function migrateSchema(database: Database.Database): void {
   // SQLite 唯一索引允许多个 NULL，天然兼容「一个用户只绑定一种外部身份」
   database.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_user_email ON admin_user(email);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_user_phone ON admin_user(phone);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_user_wechat ON admin_user(wechat_openid);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_user_sso ON admin_user(sso_uid);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_user_cert ON admin_user(cert_fingerprint);

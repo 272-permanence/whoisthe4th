@@ -8,6 +8,8 @@ import {
   getProvidersApi,
   sendEmailCodeApi,
   emailLoginApi,
+  sendPhoneCodeApi,
+  phoneLoginApi,
   createWechatQrApi,
   pollWechatQrApi,
   mockWechatScanApi,
@@ -22,15 +24,16 @@ import {
 const router = useRouter();
 const route = useRoute();
 
-/** 登录方式：账号密码 / 邮箱验证码 / 微信扫码 / 统一认证 / 数字证书 */
-type LoginMethod = 'password' | 'email' | 'wechat' | 'sso' | 'cert';
+/** 登录方式：账号密码 / 邮箱验证码 / 手机号验证码 / 微信扫码 / 统一认证 / 数字证书 */
+type LoginMethod = 'password' | 'email' | 'phone' | 'wechat' | 'sso' | 'cert';
 
-const methodTabs: { key: LoginMethod; label: string }[] = [
-  { key: 'password', label: '账号密码' },
-  { key: 'email', label: '邮箱' },
-  { key: 'wechat', label: '微信扫码' },
-  { key: 'sso', label: '统一认证' },
-  { key: 'cert', label: '证书' }
+const methodTabs: { key: LoginMethod; label: string; icon: string }[] = [
+  { key: 'password', label: '账号密码', icon: '🔑' },
+  { key: 'email', label: '邮箱验证码', icon: '✉️' },
+  { key: 'phone', label: '手机号验证码', icon: '📱' },
+  { key: 'wechat', label: '微信扫码', icon: '💬' },
+  { key: 'sso', label: '统一认证', icon: '🏛️' },
+  { key: 'cert', label: '数字证书', icon: '🔒' }
 ];
 
 const method = ref<LoginMethod>('password');
@@ -44,14 +47,15 @@ const providers = ref<ProviderStatus | null>(null);
 /** 是否全部为 mock 演示模式 */
 const demoMode = computed(() => {
   const p = providers.value;
-  return !!p && p.email.mode === 'mock' && p.wechat.mode === 'mock' && p.sso.mode === 'mock' && p.cert.mode === 'mock';
+  return !!p && p.email.mode === 'mock' && p.phone.mode === 'mock' && p.wechat.mode === 'mock' && p.sso.mode === 'mock' && p.cert.mode === 'mock';
 });
 
 const panelTitle = computed(
   () =>
     ({
-      password: mode.value === 'login' ? '登录' : '注册',
+      password: mode.value === 'login' ? '欢迎回来' : '创建账号',
       email: '邮箱验证码登录',
+      phone: '手机号验证码登录',
       wechat: '微信扫码登录',
       sso: '统一身份认证',
       cert: '数字证书登录'
@@ -117,7 +121,6 @@ async function handleSubmit() {
         captchaId.value,
         captchaCode.value.trim()
       );
-      // 验证码已消费，注册成功后回到登录态（不再自动登录）
       mode.value = 'login';
       password.value = '';
       successMsg.value = '注册成功，请使用新账号登录';
@@ -134,7 +137,6 @@ async function handleSubmit() {
     afterLogin(loginResult);
   } catch (err: unknown) {
     errorMsg.value = err instanceof Error ? err.message : '操作失败';
-    // 验证码一次性使用，失败后必须刷新
     await loadCaptcha();
   } finally {
     loading.value = false;
@@ -157,7 +159,6 @@ const countdown = ref(0);
 const devCode = ref('');
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
 
-/** 发送邮箱验证码并开启 60 秒重发倒计时 */
 async function handleSendCode() {
   errorMsg.value = '';
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim())) {
@@ -208,6 +209,63 @@ async function handleEmailLogin() {
   }
 }
 
+// ========================== 手机号验证码 ==========================
+
+const phone = ref('');
+const phoneCode = ref('');
+const phoneSending = ref(false);
+const phoneCountdown = ref(0);
+const phoneDevCode = ref('');
+let phoneCountdownTimer: ReturnType<typeof setInterval> | null = null;
+
+const PHONE_REGEX = /^1[3-9]\d{9}$/;
+
+async function handleSendPhoneCode() {
+  errorMsg.value = '';
+  if (!PHONE_REGEX.test(phone.value.trim())) {
+    errorMsg.value = '请输入正确的 11 位手机号';
+    return;
+  }
+  phoneSending.value = true;
+  try {
+    const res = await sendPhoneCodeApi(phone.value.trim());
+    phoneDevCode.value = res.devCode ?? '';
+    phoneCountdown.value = res.cooldownSec;
+    if (phoneCountdownTimer) clearInterval(phoneCountdownTimer);
+    phoneCountdownTimer = setInterval(() => {
+      phoneCountdown.value -= 1;
+      if (phoneCountdown.value <= 0 && phoneCountdownTimer) {
+        clearInterval(phoneCountdownTimer);
+        phoneCountdownTimer = null;
+      }
+    }, 1000);
+  } catch (err: unknown) {
+    errorMsg.value = err instanceof Error ? err.message : '验证码发送失败';
+  } finally {
+    phoneSending.value = false;
+  }
+}
+
+async function handlePhoneLogin() {
+  errorMsg.value = '';
+  if (!PHONE_REGEX.test(phone.value.trim())) {
+    errorMsg.value = '请输入正确的 11 位手机号';
+    return;
+  }
+  if (!phoneCode.value.trim()) {
+    errorMsg.value = '请输入手机号验证码';
+    return;
+  }
+  loading.value = true;
+  try {
+    afterLogin(await phoneLoginApi(phone.value.trim(), phoneCode.value.trim()));
+  } catch (err: unknown) {
+    errorMsg.value = err instanceof Error ? err.message : '登录失败';
+  } finally {
+    loading.value = false;
+  }
+}
+
 // ========================== 微信扫码（模拟） ==========================
 
 const qrScene = ref('');
@@ -224,7 +282,6 @@ const qrStatusText = computed(() => {
   return `请使用微信扫一扫（${qrExpiresIn.value}s 后失效）`;
 });
 
-/** 二维码图案由 sceneId 哈希生成，仅作视觉占位 */
 const qrSvg = computed(() => buildQrSvg(qrScene.value || 'mock-qr'));
 
 function buildQrSvg(seedText: string): string {
@@ -264,7 +321,6 @@ function buildQrSvg(seedText: string): string {
   );
 }
 
-/** 创建二维码并开始轮询 */
 async function initWechatQr() {
   stopQrPolling();
   errorMsg.value = '';
@@ -294,7 +350,7 @@ async function pollQrStatus() {
       stopQrPolling();
     }
   } catch {
-    // 轮询失败静默重试，避免打断用户
+    // 轮询失败静默重试
   }
 }
 
@@ -305,7 +361,6 @@ function stopQrPolling() {
   qrTicker = null;
 }
 
-/** 模拟手机扫码 */
 async function handleMockScan() {
   errorMsg.value = '';
   try {
@@ -316,7 +371,6 @@ async function handleMockScan() {
   }
 }
 
-/** 模拟手机确认登录 */
 async function handleMockConfirm() {
   errorMsg.value = '';
   try {
@@ -350,7 +404,6 @@ const certFile = ref<File | null>(null);
 const dragging = ref(false);
 const certLoading = ref(false);
 
-/** 选择/拖拽后的本地校验 */
 function setCertFile(file: File) {
   errorMsg.value = '';
   const ext = (file.name.split('.').pop() ?? '').toLowerCase();
@@ -393,7 +446,6 @@ async function handleCertLogin() {
 
 // ========================== 通用 ==========================
 
-/** 登录成功后的统一跳转：admin 进后台，普通用户进用户端 */
 function afterLogin(result: LoginResult) {
   const redirect = route.query.redirect as string | undefined;
   if (redirect) {
@@ -405,7 +457,6 @@ function afterLogin(result: LoginResult) {
   }
 }
 
-/** 切换登录方式时清理上一个通道的临时状态 */
 function switchMethod(next: LoginMethod) {
   if (method.value === next) return;
   method.value = next;
@@ -430,16 +481,41 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="login-page">
-    <div class="login-wrap">
-      <div class="brand">
-        <div class="brand-name">西湖文化 AI 导览</div>
-        <div class="brand-sub">LLM + RAG · 智能导览系统</div>
+  <div class="login-page split">
+    <!-- 左侧品牌展示区 -->
+    <div class="hero">
+      <div class="hero-bg"></div>
+      <div class="hero-content">
+        <div class="hero-badge">
+          <span class="hero-badge-dot"></span>
+          AI 智能导览平台
+        </div>
+        <h1 class="hero-title">
+          漫步西湖<br />
+          <span class="hero-title-accent">文化触手可及</span>
+        </h1>
+        <p class="hero-sub">
+          融合 LLM 与 RAG 的沉浸式文化导览系统，让每一处景点都能被听懂、被读透。
+        </p>
+        <ul class="hero-features">
+          <li><span class="hero-feat-icon">✨</span>AI 智能问答与数字人语音交互</li>
+          <li><span class="hero-feat-icon">🏛️</span>景点路线 · 文化内容一站式聚合</li>
+          <li><span class="hero-feat-icon">📊</span>运营数据可视化大屏</li>
+        </ul>
       </div>
+      <div class="hero-footer">
+        © 第八组 · 西湖文化 AI 导览系统
+      </div>
+    </div>
 
+    <!-- 右侧登录卡片 -->
+    <div class="login-card-wrap">
       <div class="login-card">
         <div class="title-row">
-          <h2 class="login-title">{{ panelTitle }}</h2>
+          <div>
+            <h2 class="login-title">{{ panelTitle }}</h2>
+            <p v-if="method === 'password'" class="login-sub">{{ mode === 'login' ? '使用您的账号密码登录系统' : '填写以下信息创建新账号' }}</p>
+          </div>
           <span v-if="demoMode" class="demo-tag">演示模式</span>
         </div>
 
@@ -455,7 +531,8 @@ onUnmounted(() => {
             :aria-selected="method === tab.key"
             @click="switchMethod(tab.key)"
           >
-            {{ tab.label }}
+            <span class="tab-icon">{{ tab.icon }}</span>
+            <span class="tab-label">{{ tab.label }}</span>
           </button>
         </div>
 
@@ -566,7 +643,58 @@ onUnmounted(() => {
           <p class="hint">首次使用邮箱验证码登录会自动创建普通账号</p>
         </form>
 
-        <!-- 3. 微信扫码 -->
+        <!-- 3. 手机号验证码 -->
+        <form v-else-if="method === 'phone'" @submit.prevent="handlePhoneLogin" class="login-form">
+          <div class="form-row">
+            <label class="label" for="login-phone">手机号</label>
+            <input
+              id="login-phone"
+              v-model="phone"
+              class="input"
+              type="tel"
+              maxlength="11"
+              placeholder="请输入 11 位手机号"
+              autocomplete="tel"
+            />
+          </div>
+
+          <div class="form-row">
+            <label class="label" for="login-phone-code">验证码</label>
+            <div class="code-row">
+              <input
+                id="login-phone-code"
+                v-model="phoneCode"
+                class="input"
+                type="text"
+                maxlength="6"
+                placeholder="6 位验证码"
+                autocomplete="one-time-code"
+              />
+              <button
+                type="button"
+                class="btn btn-secondary send-btn"
+                :disabled="phoneSending || phoneCountdown > 0"
+                @click="handleSendPhoneCode"
+              >
+                {{ phoneCountdown > 0 ? `${phoneCountdown}s 后重发` : (phoneSending ? '发送中...' : '获取验证码') }}
+              </button>
+            </div>
+          </div>
+
+          <p v-if="phoneDevCode" class="demo-tip">
+            演示模式已模拟发信，验证码：<strong class="nums">{{ phoneDevCode }}</strong>
+          </p>
+
+          <p v-if="errorMsg" class="error-bar form-error">{{ errorMsg }}</p>
+
+          <button type="submit" :disabled="loading" class="btn btn-primary submit-btn">
+            {{ loading ? '登录中...' : '登录 / 注册' }}
+          </button>
+
+          <p class="hint">首次使用手机号验证码登录会自动创建普通账号</p>
+        </form>
+
+        <!-- 4. 微信扫码 -->
         <div v-else-if="method === 'wechat'" class="wechat-panel">
           <div class="qr-box">
             <div class="qr-img" v-html="qrSvg"></div>
@@ -662,111 +790,234 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* 页面根节点自行覆盖脚手架深色底，不动全局 style.css */
+/* ============================================================
+   登录页：左右分屏布局
+   左 55% = 品牌展示区（西湖风景 + 青绿渐变遮罩 + slogan）
+   右 45% = 登录卡片
+   ============================================================ */
+
 .login-page {
   min-height: 100vh;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-4);
-  background:
-    radial-gradient(600px 320px at 50% -10%, var(--color-primary-soft), transparent 70%),
-    var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-sans);
+  background: #ffffff;
 }
 
-.login-wrap {
-  width: min(460px, 100%);
+/* ---------- 左侧品牌展示区 ---------- */
+.hero {
+  position: relative;
+  flex: 0 0 55%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 48px 56px;
+  overflow: hidden;
 }
 
-/* 品牌区：宋体标题，青绿记忆点 */
-.brand {
-  text-align: center;
-  margin-bottom: var(--space-6);
+.hero-bg {
+  position: absolute;
+  inset: 0;
+  background-image: url('https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=West%20Lake%20Hangzhou%20spring%20view%20sunset%20reflection%20ancient%20Chinese%20style&image_size=landscape_16_9');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  z-index: 0;
 }
-.brand-name {
+
+/* 青绿渐变遮罩 + 暗化，让上面的白字清晰可读 */
+.hero-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.85) 0%, rgba(7, 89, 85, 0.9) 100%);
+}
+
+.hero-content {
+  position: relative;
+  z-index: 1;
+  margin-top: auto;
+  margin-bottom: auto;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 100px;
+  background: rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(8px);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 28px;
+  letter-spacing: 0.02em;
+}
+.hero-badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4ade80;
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
+}
+
+.hero-title {
   font-family: var(--font-serif);
-  font-size: var(--text-display);
-  font-weight: 600;
-  color: var(--color-primary);
+  font-size: 52px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.2;
+  margin: 0 0 20px;
+  letter-spacing: 0.02em;
+}
+.hero-title-accent {
+  background: linear-gradient(90deg, #99f6e4 0%, #ffffff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-sub {
+  font-size: 16px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0 0 40px;
+  max-width: 460px;
+}
+
+.hero-features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.hero-features li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.hero-feat-icon {
+  font-size: 16px;
+  width: 24px;
+  flex-shrink: 0;
+}
+
+.hero-footer {
+  position: relative;
+  z-index: 1;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 12px;
   letter-spacing: 0.05em;
 }
-.brand-sub {
-  margin-top: var(--space-1);
-  font-size: var(--text-meta);
-  color: var(--color-text-2);
+
+/* ---------- 右侧登录卡片区 ---------- */
+.login-card-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  background: #ffffff;
+  overflow-y: auto;
 }
 
-/* 登录卡片：浮层面板，允许 shadow-lg */
 .login-card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
-  padding: var(--space-8);
+  width: 100%;
+  max-width: 420px;
 }
 
 .title-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: var(--space-3);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-6);
 }
+
 .login-title {
   margin: 0;
   font-family: var(--font-serif);
-  font-size: var(--text-title);
-  font-weight: 600;
+  font-size: 28px;
+  font-weight: 700;
   color: var(--color-text);
+  line-height: 1.3;
 }
-.demo-tag {
-  font-size: var(--text-meta);
-  color: var(--color-primary);
-  background: var(--color-primary-soft);
-  border-radius: var(--radius-full);
-  padding: 2px var(--space-2);
+.login-sub {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--color-text-2);
+  line-height: 1.5;
 }
 
-/* 登录方式标签：等分 5 列，选中态用主色下划线 */
+.demo-tag {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+  border-radius: 100px;
+  padding: 4px 10px;
+  font-weight: 500;
+}
+
+/* ---------- 登录方式标签：分段控件 ---------- */
 .method-tabs {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: var(--space-1);
-  border-bottom: 1px solid var(--color-border);
-  margin-bottom: var(--space-6);
+  gap: 6px;
+  padding: 4px;
+  background: var(--color-bg);
+  border-radius: 12px;
+  margin-bottom: 28px;
+  border: 1px solid var(--color-border);
 }
 .method-tab {
-  padding: var(--space-2) 0 var(--space-3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 4px;
   background: none;
   border: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  font-size: var(--text-caption);
+  border-radius: 10px;
   font-family: var(--font-sans);
   color: var(--color-text-2);
   cursor: pointer;
-  white-space: nowrap;
-  transition: color 0.15s, border-color 0.15s;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
 }
 .method-tab:hover {
   color: var(--color-text);
+  background: rgba(15, 118, 110, 0.06);
 }
 .method-tab.active {
+  background: #ffffff;
   color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
   font-weight: 600;
+  box-shadow: 0 2px 8px rgba(15, 118, 110, 0.12), 0 0 0 1px rgba(15, 118, 110, 0.1);
+}
+.tab-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+.tab-label {
+  font-size: 11px;
+  white-space: nowrap;
 }
 
+/* ---------- 表单 ---------- */
 .login-form .form-row {
   margin-bottom: var(--space-4);
 }
-
 .form-error {
   margin: 0 0 var(--space-4);
 }
 
-/* 验证码 */
 .captcha-row,
 .code-row {
   display: flex;
@@ -783,7 +1034,7 @@ onUnmounted(() => {
   width: 120px;
   height: 40px;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--color-bg);
   cursor: pointer;
   object-fit: cover;
@@ -807,17 +1058,19 @@ onUnmounted(() => {
 
 .submit-btn {
   width: 100%;
-  height: 40px;
-  font-size: var(--text-body);
+  height: 44px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 10px;
 }
 
 .switch-btn {
   display: block;
   width: 100%;
-  margin-top: var(--space-4);
+  margin-top: 16px;
   background: none;
   border: none;
-  font-size: var(--text-caption);
+  font-size: 13px;
   color: var(--color-primary);
   cursor: pointer;
   font-family: var(--font-sans);
@@ -828,45 +1081,47 @@ onUnmounted(() => {
 
 .hint {
   text-align: center;
-  font-size: var(--text-meta);
+  font-size: 12px;
   color: var(--color-text-2);
-  margin: var(--space-4) 0 0;
+  margin: 20px 0 0;
   line-height: 1.6;
 }
 .hint code {
   background: var(--color-bg);
   border: 1px solid var(--color-border);
-  padding: 1px var(--space-2);
-  border-radius: var(--space-1);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
 }
 
 /* 演示提示条 */
 .demo-tip {
-  margin: 0 0 var(--space-4);
-  padding: var(--space-2) var(--space-3);
+  margin: 0 0 16px;
+  padding: 10px 14px;
   background: var(--color-primary-soft);
   color: var(--color-primary);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-caption);
+  border-radius: 8px;
+  font-size: 13px;
 }
 .demo-tip strong {
   letter-spacing: 0.15em;
-  font-size: var(--text-body);
+  font-size: 15px;
 }
 
-/* 微信扫码 */
+/* ---------- 微信扫码 ---------- */
 .wechat-panel {
   text-align: center;
 }
 .qr-box {
   position: relative;
-  width: 180px;
-  height: 180px;
+  width: 200px;
+  height: 200px;
   margin: 0 auto var(--space-3);
-  padding: var(--space-2);
+  padding: var(--space-3);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: 12px;
   background: #fff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
 }
 .qr-img {
   width: 100%;
@@ -883,9 +1138,9 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-caption);
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 12px;
+  font-size: 13px;
   color: var(--color-text);
   line-height: 1.7;
 }
@@ -894,25 +1149,26 @@ onUnmounted(() => {
   color: var(--color-primary);
 }
 .qr-status {
-  margin: 0 0 var(--space-4);
-  font-size: var(--text-caption);
+  margin: 0 0 20px;
+  font-size: 13px;
   color: var(--color-text-2);
 }
 .demo-actions {
   display: flex;
-  gap: var(--space-3);
+  gap: 12px;
 }
 .demo-btn {
   flex: 1;
-  height: 36px;
+  height: 40px;
 }
 
-/* 统一认证 */
+/* ---------- 统一认证 ---------- */
 .sso-card {
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-6);
+  border-radius: 12px;
+  padding: 28px 24px;
   background: var(--color-bg);
+  text-align: center;
 }
 .sso-logo {
   display: flex;
@@ -922,37 +1178,37 @@ onUnmounted(() => {
   margin-bottom: var(--space-3);
 }
 .sso-mark {
-  font-size: var(--text-meta);
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
   color: #fff;
   background: var(--color-primary);
-  border-radius: var(--radius-sm);
-  padding: 2px var(--space-2);
-  letter-spacing: 0.05em;
+  border-radius: 6px;
+  padding: 4px 10px;
+  letter-spacing: 0.08em;
 }
 .sso-name {
-  font-size: var(--text-body);
+  font-size: 15px;
   font-weight: 600;
   color: var(--color-text);
 }
 .sso-desc {
-  margin: 0 0 var(--space-6);
-  font-size: var(--text-caption);
+  margin: 0 0 24px;
+  font-size: 13px;
   color: var(--color-text-2);
   line-height: 1.6;
 }
 
-/* 数字证书 */
+/* ---------- 数字证书 ---------- */
 .drop-zone {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  min-height: 132px;
+  min-height: 140px;
   padding: var(--space-4);
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-md);
+  border: 2px dashed var(--color-border);
+  border-radius: 12px;
   background: var(--color-bg);
   cursor: pointer;
   text-align: center;
@@ -966,29 +1222,74 @@ onUnmounted(() => {
 .drop-zone.selected {
   border-style: solid;
   border-color: var(--color-primary);
+  background: var(--color-primary-soft);
 }
 .drop-title {
-  font-size: var(--text-body);
+  font-size: 14px;
+  font-weight: 500;
   color: var(--color-text);
   word-break: break-all;
 }
 .drop-sub {
-  font-size: var(--text-meta);
+  font-size: 12px;
   color: var(--color-text-2);
 }
 .file-hidden {
   display: none;
 }
 
-@media (max-width: 640px) {
-  .login-card {
-    padding: var(--space-6);
+/* ---------- 响应式：768px 以下切换单栏 ---------- */
+@media (max-width: 900px) {
+  .hero {
+    padding: 40px;
+  }
+  .hero-title {
+    font-size: 40px;
+  }
+}
+
+@media (max-width: 768px) {
+  .login-page.split {
+    flex-direction: column;
+  }
+  .hero {
+    flex: none;
+    min-height: 240px;
+    padding: 32px 28px;
+  }
+  .hero-content {
+    margin: 0;
+  }
+  .hero-title {
+    font-size: 28px;
+  }
+  .hero-sub {
+    font-size: 13px;
+    margin-bottom: 0;
+  }
+  .hero-features {
+    display: none;
+  }
+  .hero-footer {
+    display: none;
+  }
+  .login-card-wrap {
+    padding: 32px 24px;
   }
   .method-tabs {
-    gap: 0;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 3px;
+    padding: 3px;
   }
   .method-tab {
-    font-size: var(--text-meta);
+    padding: 8px 2px;
+    gap: 4px;
+  }
+  .tab-icon {
+    font-size: 16px;
+  }
+  .tab-label {
+    font-size: 10px;
   }
 }
 </style>

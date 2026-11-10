@@ -40,6 +40,12 @@ const routes = [
     component: () => import('../views/Login.vue'),
     meta: { public: true, title: '登录' }
   },
+  {
+    path: '/profile',
+    name: 'profile',
+    component: () => import('../views/Profile.vue'),
+    meta: { requiresAuth: true, title: '个人中心' }
+  },
   // ---------- Admin 后台（独立布局）----------
   {
     path: '/admin',

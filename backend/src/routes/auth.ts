@@ -4,7 +4,9 @@
  * @date 2026-11-03
  */
 import { Router, type Request, type Response } from 'express';
-import { login, register, getUserById, findUserByUsername } from '../services/authService.js';
+import { login, register, getUserById, findUserByUsername, updateUser, resetUserPassword } from '../services/authService.js';
+import bcrypt from 'bcryptjs';
+import { getAuthDb } from '../services/authDb.js';
 import { requireAuth } from '../middleware/auth.js';
 import { saveLoginLog, type LoginResult } from '../services/logService.js';
 import { createCaptcha, verifyCaptcha } from '../services/captchaService.js';
@@ -97,6 +99,45 @@ router.get('/me', requireAuth, (req: Request, res: Response) => {
   const user = getUserById(req.user!.uid);
   if (!user) throw new HttpError(404, ErrorCodeEnum.NOT_FOUND.code, '用户不存在');
   res.json({ code: 0, message: 'ok', data: user });
+});
+
+/** PATCH /api/v1/auth/me — 修改昵称（当前登录用户改自己） */
+router.patch('/me', requireAuth, (req: Request, res: Response) => {
+  const { nickname } = req.body ?? {};
+  // 只允许改 nickname；role / status 走 admin 用户管理接口
+  if (nickname === undefined) {
+    throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM.code, 'nickname 必填');
+  }
+  const name = String(nickname).trim();
+  if (name.length > 32) {
+    throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM.code, '昵称不能超过 32 个字符');
+  }
+  const ok = updateUser(req.user!.uid, { nickname: name || undefined });
+  if (!ok) throw new HttpError(404, ErrorCodeEnum.NOT_FOUND.code, '用户不存在');
+  const user = getUserById(req.user!.uid)!;
+  res.json({ code: 0, message: 'ok', data: user });
+});
+
+/** PATCH /api/v1/auth/password — 修改密码（需校验旧密码） */
+router.patch('/password', requireAuth, (req: Request, res: Response) => {
+  const { oldPassword, newPassword } = req.body ?? {};
+  if (!oldPassword || !newPassword) {
+    throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM.code, 'oldPassword / newPassword 必填');
+  }
+  if (String(newPassword).length < 6) {
+    throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM.code, '新密码至少 6 位');
+  }
+  // 从原表读出 password_hash 来校验旧密码（getUserById 返回的是 toSafeUser，不含哈希）
+  const db = getAuthDb();
+  const row = db.prepare('SELECT password_hash FROM admin_user WHERE id = ?').get(req.user!.uid) as
+    | { password_hash: string }
+    | undefined;
+  if (!row) throw new HttpError(404, ErrorCodeEnum.NOT_FOUND.code, '用户不存在');
+  if (!bcrypt.compareSync(String(oldPassword), row.password_hash)) {
+    throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM.code, '旧密码不正确');
+  }
+  resetUserPassword(req.user!.uid, String(newPassword));
+  res.json({ code: 0, message: 'ok', data: null });
 });
 
 export default router;

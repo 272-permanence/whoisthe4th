@@ -18,6 +18,10 @@ import {
   isValidEmail,
   normalizeEmail,
   loginByEmail,
+  sendPhoneCode,
+  verifyPhoneCode,
+  isValidPhone,
+  loginByPhone,
   createWechatQr,
   getWechatQrStatus,
   simulateWechatScan,
@@ -91,6 +95,11 @@ router.get('/providers', (_req: Request, res: Response) => {
         mode: config.unified.email.provider,
         exposeCode: config.unified.email.exposeCode
       },
+      phone: {
+        enabled: true,
+        mode: config.unified.phone.provider,
+        exposeCode: config.unified.phone.exposeCode
+      },
       wechat: { enabled: true, mode: config.unified.wechat.mock ? 'mock' : 'real' },
       sso: { enabled: true, ...getSsoConfig() },
       cert: { enabled: true, mode: config.unified.cert.mode }
@@ -142,6 +151,42 @@ router.post('/email/login', (req: Request, res: Response) => {
   }
 
   respondLogin(req, res, loginByEmail(normalized), normalized, '邮箱');
+});
+
+// ========================== 手机号验证码 ==========================
+
+/** POST /phone/code - 发送手机号验证码（mock 模式直接回传 devCode） */
+router.post('/phone/code', async (req: Request, res: Response) => {
+  const { phone } = req.body ?? {};
+  if (!phone || !isValidPhone(String(phone))) {
+    throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM.code, '请输入正确的 11 位手机号');
+  }
+  const result = await sendPhoneCode(String(phone));
+  if ('error' in result) {
+    throw new HttpError(429, ErrorCodeEnum.INVALID_PARAM.code, result.error);
+  }
+  res.json({ code: 0, message: 'ok', data: result });
+});
+
+/** POST /phone/login - 手机号验证码登录（首次登录自动建号） */
+router.post('/phone/login', (req: Request, res: Response) => {
+  const { phone, code } = req.body ?? {};
+  if (!phone || !isValidPhone(String(phone))) {
+    throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM.code, '请输入正确的 11 位手机号');
+  }
+  if (!code) {
+    throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM.code, '请输入手机号验证码');
+  }
+  if (!verifyPhoneCode(String(phone), String(code))) {
+    saveLoginLog({
+      traceId: req.traceId ?? '-',
+      username: `手机:${maskSingle(String(phone))}`,
+      ip: clientIp(req),
+      loginResult: 'fail_external'
+    });
+    throw new HttpError(401, ErrorCodeEnum.CAPTCHA_INVALID.code, '验证码错误或已过期，请重新获取');
+  }
+  respondLogin(req, res, loginByPhone(String(phone)), String(phone), '手机');
 });
 
 // ========================== 微信扫码（mock） ==========================

@@ -17,6 +17,7 @@ export interface LoginUser {
   username: string;
   role: 'admin' | 'user';
   nickname: string | null;
+  status?: 'active' | 'disabled';
 }
 
 export interface LoginResult {
@@ -105,6 +106,39 @@ export async function getMeApi(): Promise<LoginUser> {
   return payload.data;
 }
 
+/** 修改个人信息（昵称） */
+export async function updateMeApi(nickname: string): Promise<LoginUser> {
+  const token = getToken();
+  if (!token) throw new Error('未登录');
+  const res = await fetch(`${AUTH_BASE}/me`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ nickname })
+  });
+  const payload = (await res.json()) as ApiResult<LoginUser>;
+  if (!res.ok || payload.code !== 0) {
+    throw new Error(payload.message || `HTTP ${res.status}`);
+  }
+  // 同步更新本地缓存
+  localStorage.setItem('user', JSON.stringify(payload.data));
+  return payload.data;
+}
+
+/** 修改密码（需校验旧密码） */
+export async function changePasswordApi(oldPassword: string, newPassword: string): Promise<void> {
+  const token = getToken();
+  if (!token) throw new Error('未登录');
+  const res = await fetch(`${AUTH_BASE}/password`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ oldPassword, newPassword })
+  });
+  const payload = (await res.json()) as ApiResult<null>;
+  if (!res.ok || payload.code !== 0) {
+    throw new Error(payload.message || `HTTP ${res.status}`);
+  }
+}
+
 /** 登出（前端清本地存储） */
 export function logout(): void {
   localStorage.removeItem('token');
@@ -132,6 +166,7 @@ export function getCachedToken(): string | null {
 export interface ProviderStatus {
   password: { enabled: boolean; mode: string };
   email: { enabled: boolean; mode: string; exposeCode: boolean };
+  phone: { enabled: boolean; mode: string; exposeCode: boolean };
   wechat: { enabled: boolean; mode: string };
   sso: { enabled: boolean; mode: string; url: string; clientId: string };
   cert: { enabled: boolean; mode: string };
@@ -196,6 +231,18 @@ export function sendEmailCodeApi(email: string): Promise<EmailCodeResult> {
 /** 邮箱验证码登录（首次登录自动注册为普通用户） */
 export async function emailLoginApi(email: string, code: string): Promise<LoginResult> {
   const data = await postJson<LoginResult>('/email/login', { email, code });
+  persistLogin(data);
+  return data;
+}
+
+/** 发送手机号验证码 */
+export async function sendPhoneCodeApi(phone: string): Promise<EmailCodeResult> {
+  return postJson<EmailCodeResult>('/phone/code', { phone });
+}
+
+/** 手机号验证码登录（首次登录自动注册为普通用户） */
+export async function phoneLoginApi(phone: string, code: string): Promise<LoginResult> {
+  const data = await postJson<LoginResult>('/phone/login', { phone, code });
   persistLogin(data);
   return data;
 }

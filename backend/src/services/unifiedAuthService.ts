@@ -108,6 +108,76 @@ export function loginByEmail(email: string): LoginOutcome {
   return loginByExternal('email', key, key.split('@')[0]);
 }
 
+// ========================== 手机号验证码 ==========================
+
+interface PhoneCodeRecord {
+  code: string;
+  expiresAt: number;
+  lastSentAt: number;
+}
+
+/** 手机号 → 验证码记录 */
+const phoneCodes = new Map<string, PhoneCodeRecord>();
+
+/** 大陆手机号：11 位，1 开头，第二位 3-9 */
+export function isValidPhone(phone: string): boolean {
+  return /^1[3-9]\d{9}$/.test(phone.trim());
+}
+
+/**
+ * 生成并「发送」手机号验证码（mock：直接返回前端；sms：真实对接阿里云/腾讯云 SMS）
+ */
+export async function sendPhoneCode(
+  phone: string
+): Promise<{ expiresIn: number; cooldownSec: number; mock: boolean; devCode?: string } | { error: string }> {
+  const key = phone.trim();
+  const now = Date.now();
+  const prev = phoneCodes.get(key);
+
+  if (prev && now - prev.lastSentAt < config.unified.phone.cooldownSec * 1000) {
+    const wait = Math.ceil((config.unified.phone.cooldownSec * 1000 - (now - prev.lastSentAt)) / 1000);
+    return { error: `发送过于频繁，请 ${wait} 秒后再试` };
+  }
+
+  const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+  const ttlSec = config.unified.phone.codeTtlSec;
+  phoneCodes.set(key, { code, expiresAt: now + ttlSec * 1000, lastSentAt: now });
+
+  const mock = config.unified.phone.provider === 'mock';
+
+  // 真实 SMS 对接点（mock 跳过）：阿里云 dysmsapi / 腾讯云 sms 发信
+  if (!mock) {
+    phoneCodes.delete(key); // 真实短信发不出去就不占用冷却
+    return { error: '真实短信发送尚未对接，请在后端接入阿里云/腾讯云 SMS 后再试' };
+  }
+
+  return {
+    expiresIn: ttlSec,
+    cooldownSec: config.unified.phone.cooldownSec,
+    mock,
+    devCode: mock && config.unified.phone.exposeCode ? code : undefined
+  };
+}
+
+/** 校验手机号验证码（一次性消费） */
+export function verifyPhoneCode(phone: string, code: string): boolean {
+  const key = phone.trim();
+  const record = phoneCodes.get(key);
+  if (!record) return false;
+  if (Date.now() > record.expiresAt) {
+    phoneCodes.delete(key);
+    return false;
+  }
+  if (record.code !== code.trim()) return false;
+  phoneCodes.delete(key);
+  return true;
+}
+
+/** 手机号验证码登录：首次登录自动建号 */
+export function loginByPhone(phone: string): LoginOutcome {
+  return loginByExternal('phone', phone.trim(), `手机用户${phone.trim().slice(-4)}`);
+}
+
 // ========================== 微信扫码（mock） ==========================
 
 export type QrStatus = 'pending' | 'scanned' | 'confirmed' | 'expired';

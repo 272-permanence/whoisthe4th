@@ -24,8 +24,8 @@ function handleLogout() {
   <div class="admin-layout">
     <aside class="sidebar">
       <div class="sidebar-header">
-        <span class="logo">🎫</span>
-        <span class="app-name">导览管理后台</span>
+        <span class="logo">西湖</span>
+        <span class="app-name">西湖文化 AI 导览</span>
       </div>
       <nav class="menu">
         <router-link
@@ -46,7 +46,7 @@ function handleLogout() {
         <span class="current">{{ route.meta.title || '' }}</span>
         <div class="user-area">
           <span>{{ user?.username }}（{{ user?.role }}）</span>
-          <button @click="handleLogout">退出登录</button>
+          <button class="btn btn-secondary logout-btn" @click="handleLogout">退出登录</button>
         </div>
       </header>
       <div class="content-area">
@@ -80,7 +80,14 @@ function handleLogout() {
   align-items: center;
   gap: var(--space-2);
 }
-.sidebar-header .logo { font-size: 20px; }
+.sidebar-header .logo {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-primary);
+  letter-spacing: 0.05em;
+  line-height: 1;
+}
 .sidebar-header .app-name {
   font-family: var(--font-serif);
   font-weight: 600;

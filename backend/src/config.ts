@@ -155,6 +155,16 @@ export const config = {
       /** mock 模式下是否把验证码回传给前端（仅演示环境开启） */
       exposeCode: readText('EMAIL_EXPOSE_CODE', 'true') === 'true'
     },
+    phone: {
+      /** mock：验证码直接返回前端演示；sms：接入阿里云/腾讯云 SMS 真实发信 */
+      provider: readText('PHONE_PROVIDER', 'mock') as 'mock' | 'sms',
+      /** 验证码有效期（秒） */
+      codeTtlSec: readInt('PHONE_CODE_TTL', 300),
+      /** 发送冷却时间（秒） */
+      cooldownSec: readInt('PHONE_CODE_COOLDOWN', 60),
+      /** mock 模式下是否把验证码回传给前端 */
+      exposeCode: readText('PHONE_EXPOSE_CODE', 'true') === 'true'
+    },
     wechat: {
       /** 微信开放平台网站应用（扫码登录）资质 */
       appId: readText('WECHAT_APP_ID', ''),

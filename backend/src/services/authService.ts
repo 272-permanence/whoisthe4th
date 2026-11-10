@@ -12,11 +12,12 @@ export type UserRole = 'admin' | 'user';
 export type UserStatus = 'active' | 'disabled';
 
 /** 统一身份认证提供方 */
-export type ExternalProvider = 'email' | 'wechat' | 'sso' | 'cert';
+export type ExternalProvider = 'email' | 'phone' | 'wechat' | 'sso' | 'cert';
 
 /** 提供方 → admin_user 身份标识列 */
 const EXTERNAL_COLUMN: Record<ExternalProvider, string> = {
   email: 'email',
+  phone: 'phone',
   wechat: 'wechat_openid',
   sso: 'sso_uid',
   cert: 'cert_fingerprint'
@@ -36,6 +37,7 @@ export interface UserRecord {
   nickname: string | null;
   status: UserStatus;
   email: string | null;
+  phone: string | null;
   wechat_openid: string | null;
   sso_uid: string | null;
   cert_fingerprint: string | null;
@@ -44,7 +46,7 @@ export interface UserRecord {
 }
 
 /** 对外安全的用户信息（不含密码哈希与外部身份标识） */
-export type SafeUser = Omit<UserRecord, 'password_hash' | 'wechat_openid' | 'sso_uid' | 'cert_fingerprint'>;
+export type SafeUser = Omit<UserRecord, 'password_hash' | 'phone' | 'wechat_openid' | 'sso_uid' | 'cert_fingerprint'>;
 
 export function signToken(payload: JwtPayload): string {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -154,7 +156,7 @@ export function loginByExternal(
  */
 function buildExternalUsername(provider: ExternalProvider, identifier: string): string {
   const db = getAuthDb();
-  const prefix = { email: 'mail', wechat: 'wx', sso: 'sso', cert: 'cert' }[provider];
+  const prefix = { email: 'mail', phone: 'phone', wechat: 'wx', sso: 'sso', cert: 'cert' }[provider];
   const raw = identifier.replace(/[^a-zA-Z0-9]/g, '').slice(0, 12) || Date.now().toString(36);
   let name = `${prefix}_${raw}`;
   let index = 2;
