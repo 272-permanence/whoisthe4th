@@ -141,9 +141,12 @@ export const config = {
     email: {
       /** mock：不真正发信，验证码直接返回前端演示；smtp：接入真实邮件服务 */
       provider: readText('EMAIL_PROVIDER', 'mock') as 'mock' | 'smtp',
-      smtpHost: readText('SMTP_HOST', ''),
+      smtpHost: readText('SMTP_HOST', 'smtp.qq.com'),
       smtpPort: readInt('SMTP_PORT', 465),
+      /** 465 端口走 SSL 直连，587 端口需关闭（STARTTLS） */
+      smtpSecure: readText('SMTP_SECURE', 'true') !== 'false',
       smtpUser: readText('SMTP_USER', ''),
+      /** QQ / 163 等邮箱填「授权码」，不是登录密码 */
       smtpPass: readText('SMTP_PASS', ''),
       from: readText('SMTP_FROM', 'noreply@scenic-ai.local'),
       /** 验证码有效期 / 重发冷却（秒） */

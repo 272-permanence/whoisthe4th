@@ -3,13 +3,15 @@
  * @author 第八组（成员C）
  * @date 2026-11-10
  * @description 课程演示版实现：
- *              - 全部为 mock 模式，不依赖任何真实外部资质（微信开放平台、SMTP、学校 CAS、CA）
+ *              - 默认全部为 mock 模式，不依赖任何真实外部资质
+ *              - 邮件通道已接入真实 SMTP（EMAIL_PROVIDER=smtp + 授权码即启用）
  *              - 验证码 / 二维码会话存在进程内存，重启即失效（演示足够）
- *              - 真实对接位置已在 config.unified 中预留开关，替换本文件对应分支即可
+ *              - 微信 / 统一认证 / 证书的真实对接位置已在 config.unified 中预留开关
  */
 import crypto from 'node:crypto';
 import { config } from '../config.js';
 import { loginByExternal, type SafeUser } from './authService.js';
+import { sendLoginCodeMail } from './mailService.js';
 
 export interface LoginPayload {
   user: SafeUser;
@@ -43,9 +45,9 @@ export function isValidEmail(email: string): boolean {
  * 生成并「发送」邮箱验证码
  * @param email 收件邮箱
  */
-export function sendEmailCode(
+export async function sendEmailCode(
   email: string
-): { expiresIn: number; cooldownSec: number; mock: boolean; devCode?: string } | { error: string } {
+): Promise<{ expiresIn: number; cooldownSec: number; mock: boolean; devCode?: string } | { error: string }> {
   const key = normalizeEmail(email);
   const now = Date.now();
   const prev = emailCodes.get(key);
@@ -57,21 +59,25 @@ export function sendEmailCode(
   }
 
   const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
-  emailCodes.set(key, {
-    code,
-    expiresAt: now + config.unified.email.codeTtlSec * 1000,
-    lastSentAt: now
-  });
+  const ttlSec = config.unified.email.codeTtlSec;
+  emailCodes.set(key, { code, expiresAt: now + ttlSec * 1000, lastSentAt: now });
 
   const mock = config.unified.email.provider === 'mock';
-  // 真实 SMTP 分支：此处改为 nodemailer 发信，验证码不返回给前端
+
+  // 真实 SMTP 分支：nodemailer 发信，验证码不下发给前端
   if (!mock) {
-    console.warn('[unified-auth] EMAIL_PROVIDER=smtp，但当前仍未接入 nodemailer，验证码仅打印在服务端日志');
-    console.info(`[unified-auth] ${key} 验证码: ${code}`);
+    try {
+      await sendLoginCodeMail(key, code, Math.round(ttlSec / 60));
+    } catch (err) {
+      // 发送失败不占用冷却时间，允许用户立刻重试
+      emailCodes.delete(key);
+      console.error('[unified-auth] 邮件发送失败:', err);
+      return { error: '邮件发送失败，请检查后端 SMTP 配置（QQ 邮箱需使用授权码）' };
+    }
   }
 
   return {
-    expiresIn: config.unified.email.codeTtlSec,
+    expiresIn: ttlSec,
     cooldownSec: config.unified.email.cooldownSec,
     mock,
     devCode: mock && config.unified.email.exposeCode ? code : undefined

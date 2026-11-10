@@ -9,7 +9,7 @@
  *              - 数字证书：POST /cert/login（multipart，字段名 cert）
  *              默认全部 mock，真实对接只需改 unifiedAuthService 对应分支
  */
-import { Router, type Request, type Response } from 'express';
+import { Router, type NextFunction, type Request, type Response } from 'express';
 import multer from 'multer';
 import { config } from '../config.js';
 import {
@@ -100,18 +100,24 @@ router.get('/providers', (_req: Request, res: Response) => {
 
 // ========================== 邮件验证码 ==========================
 
-/** POST /email/code - 发送邮箱验证码（mock 模式直接回传 devCode 供演示） */
-router.post('/email/code', (req: Request, res: Response) => {
-  const { email } = req.body ?? {};
-  if (!email || !isValidEmail(String(email))) {
-    throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM.code, '请输入正确的邮箱地址');
-  }
+/** POST /email/code - 发送邮箱验证码（mock 模式直接回传 devCode 供演示；smtp 模式真实发信） */
+router.post('/email/code', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { email } = req.body ?? {};
+    if (!email || !isValidEmail(String(email))) {
+      throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM.code, '请输入正确的邮箱地址');
+    }
 
-  const result = sendEmailCode(String(email));
-  if ('error' in result) {
-    throw new HttpError(429, ErrorCodeEnum.INVALID_PARAM.code, result.error);
+    const result = await sendEmailCode(String(email));
+    if ('error' in result) {
+      // 发信失败按服务不可用处理，冷却中按请求过频处理
+      const status = result.error.includes('邮件发送失败') ? 503 : 429;
+      throw new HttpError(status, ErrorCodeEnum.INVALID_PARAM.code, result.error);
+    }
+    res.json({ code: 0, message: 'ok', data: result });
+  } catch (err) {
+    next(err);
   }
-  res.json({ code: 0, message: 'ok', data: result });
 });
 
 /** POST /email/login - 邮箱验证码登录（首次登录自动建号） */
