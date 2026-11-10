@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="x-content-type" content="presentation" />
+<meta name="x-presentation-version" content="1.0" />
+<meta name="x-presentation-indicator" content="deck-stage .slide" />
+<title>景区导览 AI · 日志系统技术分析 | 第八组</title>
+<style>
+/* ============ 主题：indigo-code（深色工程风） ============ */
+:root {
+  --bg: #0d1117;
+  --bg-elev: #161b22;
+  --surface: #1c2333;
+  --surface-2: #21283a;
+  --border: #30363d;
+  --text-1: #e6edf3;
+  --text-2: #8b949e;
+  --text-dim: #6e7681;
+  --accent: #58a6ff;
+  --accent-2: #79c0ff;
+  --accent-3: #1f6feb;
+  --green: #3fb950;
+  --yellow: #d29922;
+  --red: #f85149;
+  --purple: #bc8cff;
+  --cyan: #56d4dd;
+  --orange: #ffa657;
+  --radius: 10px;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); font-family: var(--sans); color: var(--text-1); }
+
+deck-stage { position: relative; width: 1920px; height: 1080px; transform-origin: top left; }
+.slide {
+  position: absolute; inset: 0;
+  opacity: 0; visibility: hidden;
+  transition: opacity .35s ease, visibility .35s;
+  padding: 80px 120px;
+  display: flex; flex-direction: column;
+  background: var(--bg);
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(88,166,255,.12), transparent),
+    radial-gradient(ellipse 60% 40% at 10% 100%, rgba(31,111,235,.08), transparent);
+}
+.slide.active { opacity: 1; visibility: visible; }
+
+/* 通用标题 */
+.slide h1 { font-size: 72px; font-weight: 800; letter-spacing: -1px; line-height: 1.15; }
+.slide h2 { font-size: 48px; font-weight: 700; letter-spacing: -0.5px; }
+.slide h3 { font-size: 32px; font-weight: 600; }
+.slide .eyebrow { font-size: 18px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 3px; margin-bottom: 16px; }
+.slide .subtitle { font-size: 28px; color: var(--text-2); margin-top: 20px; }
+.slide .meta { font-size: 20px; color: var(--text-dim); }
+
+/* 列表 */
+.bullets { list-style: none; }
+.bullets li { font-size: 26px; line-height: 1.7; padding: 6px 0 6px 36px; position: relative; color: var(--text-1); }
+.bullets li::before {
+  content: ''; position: absolute; left: 4px; top: 18px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 12px var(--accent);
+}
+
+/* 代码块 */
+.code-block {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 24px 28px;
+  font-family: var(--mono); font-size: 20px; line-height: 1.55;
+  overflow-x: auto; color: var(--text-1);
+}
+.code-block .k { color: var(--purple); }
+.code-block .s { color: var(--green); }
+.code-block .c { color: var(--text-dim); font-style: italic; }
+.code-block .n { color: var(--orange); }
+.code-block .v { color: var(--cyan); }
+
+/* 卡片网格 */
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 32px; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 28px 30px;
+  transition: transform .2s, border-color .2s;
+}
+.card:hover { border-color: var(--accent-3); transform: translateY(-2px); }
+.card-title { font-size: 24px; font-weight: 700; color: var(--accent-2); margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+.card-title .emoji { font-size: 28px; }
+.card-desc { font-size: 20px; color: var(--text-2); line-height: 1.6; }
+
+/* 对比表 */
+table.compare { width: 100%; border-collapse: collapse; font-size: 20px; }
+table.compare th { text-align: left; padding: 14px 18px; background: var(--surface-2); border-bottom: 2px solid var(--accent); color: var(--accent-2); font-weight: 600; }
+table.compare td { padding: 14px 18px; border-bottom: 1px solid var(--border); color: var(--text-1); }
+table.compare tr:hover td { background: rgba(88,166,255,.04); }
+.pass { color: var(--green); }
+.fail { color: var(--red); }
+.warn { color: var(--yellow); }
+
+/* 架构图 */
+.arch-box {
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: var(--radius); padding: 18px 24px;
+  font-size: 18px;
+}
+.arch-title { font-weight: 700; color: var(--accent-2); font-size: 20px; margin-bottom: 6px; }
+.arch-sub { color: var(--text-2); font-size: 16px; }
+.arch-flow { display: flex; align-items: center; gap: 12px; }
+.arrow { color: var(--accent); font-size: 28px; flex-shrink: 0; }
+
+/* Stat */
+.stat-num { font-size: 88px; font-weight: 800; color: var(--accent); line-height: 1; font-family: var(--mono); }
+.stat-label { font-size: 22px; color: var(--text-2); margin-top: 10px; }
+
+/* Section divider */
+.section-divider-slide { justify-content: center; align-items: center; text-align: center; }
+.section-divider-slide .chapter { font-size: 22px; color: var(--accent); letter-spacing: 6px; text-transform: uppercase; margin-bottom: 18px; }
+.section-divider-slide .section-title { font-size: 64px; font-weight: 800; background: linear-gradient(135deg, var(--accent), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+/* Cover */
+.cover-slide { justify-content: center; align-items: center; text-align: center; }
+.cover-slide .tag { font-size: 16px; letter-spacing: 8px; color: var(--text-dim); text-transform: uppercase; margin-bottom: 28px; }
+.cover-slide h1 { font-size: 80px; background: linear-gradient(135deg, #58a6ff 0%, #bc8cff 60%, #56d4dd 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.cover-slide .sub { font-size: 28px; color: var(--text-2); margin-top: 24px; }
+.cover-slide .team { font-size: 22px; color: var(--text-dim); margin-top: 48px; font-family: var(--mono); }
+
+/* Notes - presenter only */
+.notes { display: none; }
+
+/* Progress bar */
+.progress {
+  position: fixed; bottom: 0; left: 0; height: 3px;
+  background: var(--accent); transition: width .3s; z-index: 100;
+  box-shadow: 0 0 8px var(--accent);
+}
+
+/* Decorations */
+.deco-grid::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(88,166,255,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(88,166,255,.04) 1px, transparent 1px);
+  background-size: 40px 40px; mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 40%, transparent 80%);
+}
+.deco-orb { position: absolute; border-radius: 50%; filter: blur(80px); pointer-events: none; opacity: .3; }
+
+/* 动画 */
+@keyframes fade-up { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes stagger { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes pulse-glow { 0%,100% { box-shadow: 0 0 20px rgba(88,166,255,.3); } 50% { box-shadow: 0 0 40px rgba(88,166,255,.6); } }
+
+.slide.active [data-anim="fade-up"] { animation: fade-up .6s ease both; }
+.slide.active [data-anim="stagger"] > * { animation: stagger .5s ease both; }
+.slide.active [data-anim="stagger"] > *:nth-child(1) { animation-delay: .1s; }
+.slide.active [data-anim="stagger"] > *:nth-child(2) { animation-delay: .18s; }
+.slide.active [data-anim="stagger"] > *:nth-child(3) { animation-delay: .26s; }
+.slide.active [data-anim="stagger"] > *:nth-child(4) { animation-delay: .34s; }
+.slide.active [data-anim="stagger"] > *:nth-child(5) { animation-delay: .42s; }
+.slide.active [data-anim="stagger"] > *:nth-child(6) { animation-delay: .5s; }
+.slide.active .pulse { animation: pulse-glow 2s ease-in-out infinite; }
+
+/* Terminal look */
+.terminal-header {
+  display: flex; gap: 6px; padding: 12px 16px;
+  background: #2d333b; border-radius: 8px 8px 0 0;
+  border: 1px solid var(--border); border-bottom: none;
+}
+.dot { width: 12px; height: 12px; border-radius: 50%; }
+.dot.r { background: #ff5f56; }
+.dot.y { background: #ffbd2e; }
+.dot.g { background: #27c93f; }
+.terminal-body { background: var(--surface); border: 1px solid var(--border); border-radius: 0 0 8px 8px; padding: 20px 24px; font-family: var(--mono); font-size: 18px; line-height: 1.6; }
+.t-info { color: var(--green); }
+.t-warn { color: var(--yellow); }
+.t-err { color: var(--red); }
+.t-trace { color: var(--purple); }
+.t-ts { color: var(--text-dim); }
+.t-ip { color: var(--cyan); }
+
+/* Diagram box colors */
+.diag-frontend { border-color: var(--accent); background: rgba(88,166,255,.08); }
+.diag-backend { border-color: var(--purple); background: rgba(188,140,255,.08); }
+.diag-redis { border-color: var(--red); background: rgba(248,81,73,.08); }
+.diag-mysql { border-color: var(--orange); background: rgba(255,166,87,.08); }
+.diag-log { border-color: var(--green); background: rgba(63,185,80,.08); }
+</style>
+</head>
+<body>
+<deck-stage width="1920" height="1080">
+
+<!-- ============ 1. Cover ============ -->
+<section class="slide cover-slide deco-grid" data-deck-label="封面">
+  <div class="deco-orb" style="width:500px;height:500px;background:var(--accent);top:-200px;left:-100px;"></div>
+  <div class="deco-orb" style="width:400px;height:400px;background:var(--purple);bottom:-150px;right:-100px;"></div>
+  <div class="tag">TECHNICAL SHARING · 2026</div>
+  <h1>景区导览 AI<br>日志系统技术分析</h1>
+  <div class="sub">从 Pino 到 Redis Stream：一条完整的全链路日志链路</div>
+  <div class="team">第八组 · 成员 A 前端 / B 后端 & QA / C 框架 & RBAC / D 数据 & 看板</div>
+  <div class="notes">开场自我介绍 + 背景</div>
+</section>
+
+<!-- ============ 2. TOC ============ -->
+<section class="slide deco-grid" data-deck-label="目录">
+  <div class="eyebrow">AGENDA</div>
+  <h2>今天分享 5 件事</h2>
+  <div class="grid-4" style="margin-top:48px;" data-anim="stagger">
+    <div class="card"><div class="card-title"><span class="emoji">🎯</span>为什么需要日志</div><div class="card-desc">项目痛点 + 三方分工图</div></div>
+    <div class="card"><div class="card-title"><span class="emoji">🏗️</span>架构全景</div><div class="card-desc">一张图看完整链路</div></div>
+    <div class="card"><div class="card-title"><span class="emoji">🔍</span>核心技术分析</div><div class="card-desc">Pino / traceId / 脱敏 / Redis Stream</div></div>
+    <div class="card"><div class="card-title"><span class="emoji">🎬</span>现场 Demo</div><div class="card-desc">真实后端日志输出演示</div></div>
+  </div>
+  <div class="meta" style="margin-top:auto;">第五部分：踩坑总结 + Q&A</div>
+  <div class="notes">快速过一遍目录，建立预期</div>
+</section>
+
+<!-- ============ 3. Section: 背景 ============ -->
+<section class="slide section-divider-slide deco-grid" data-deck-label="章节1：背景">
+  <div class="chapter">CHAPTER 01</div>
+  <div class="section-title">为什么需要日志系统？</div>
+  <div class="notes">进入第一部分：问题陈述</div>
+</section>
+
+<!-- ============ 4. 痛点 ============ -->
+<section class="slide deco-grid" data-deck-label="痛点">
+  <div class="eyebrow">PROBLEM</div>
+  <h2>没有日志，线上就是盲人摸象</h2>
+  <div class="grid-3" style="margin-top:48px;" data-anim="stagger">
+    <div class="card"><div class="card-title"><span class="emoji">🩴</span>裸 console.log</div><div class="card-desc">只有开发时打印，生产环境丢了就没了。无法检索、无法聚合、无法审计。</div></div>
+    <div class="card"><div class="card-title"><span class="emoji">🔗</span>请求之间无关联</div><div class="card-desc">用户点了 5 个页面后报错，无法串起完整调用链。定位 bug 要猜。</div></div>
+    <div class="card"><div class="card-title"><span class="emoji">📉</span>没有用户行为数据</div><div class="card-desc">不知道哪个景点最热门、哪个路径转化率最低、什么时候用户流失了。</div></div>
+  </div>
+  <div class="notes">用三个痛点引出我们要解决什么问题</div>
+</section>
+
+<!-- ============ 5. 三方分工 ============ -->
+<section class="slide deco-grid" data-deck-label="三方分工">
+  <div class="eyebrow">WHO DOES WHAT</div>
+  <h2>四人分工，各有侧重</h2>
+  <div class="grid-4" style="margin-top:48px;" data-anim="stagger">
+    <div class="card diag-frontend" style="border-width:2px;"><div class="card-title"><span class="emoji">🎙️</span>成员 A</div><div class="card-desc">语音交互引擎 + 前端 log 埋点接入 + apiClient traceId 传递</div></div>
+    <div class="card diag-backend" style="border-width:2px;"><div class="card-title"><span class="emoji">🔧</span>成员 B</div><div class="card-desc">Pino 日志框架选型 + 脱敏工具 + 操作/错误日志中间件</div></div>
+    <div class="card" style="border-color:var(--yellow);border-width:2px;background:rgba(210,153,34,.08);"><div class="card-title" style="color:var(--yellow);"><span class="emoji">🛡️</span>成员 C</div><div class="card-desc">AsyncLocalStorage traceId + 统一身份认证 + 6 通道登录审计</div></div>
+    <div class="card diag-redis" style="border-width:2px;"><div class="card-title"><span class="emoji">📊</span>成员 D</div><div class="card-desc">3 表 DDL + Redis Stream 队列 + 日志查询/审计/行为分析 API</div></div>
+  </div>
+  <div class="meta" style="margin-top:40px;">✅ 三方都写完了各自的模块，<span class="t-info">合并后零冲突遗留</span></div>
+  <div class="notes">介绍每个人负责的模块，为后面技术分析铺垫</div>
+</section>
+
+<!-- ============ 6. Section: 架构全景 ============ -->
+<section class="slide section-divider-slide deco-grid" data-deck-label="章节2：架构">
+  <div class="chapter">CHAPTER 02</div>
+  <div class="section-title">整体架构：一张图</div>
+  <div class="notes">进入架构部分</div>
+</section>
+
+<!-- ============ 7. 架构图 ============ -->
+<section class="slide deco-grid" data-deck-label="架构全景图">
+  <div class="eyebrow">ARCHITECTURE</div>
+  <h2>完整日志链路</h2>
+
+  <!-- 第一行：前端 -->
+  <div style="margin-top:32px;" class="arch-flow">
+    <div class="arch-box diag-frontend" style="flex:1;">
+      <div class="arch-title">🌐 前端（成员 A + D）</div>
+      <div class="arch-sub">apiClient 自动注入 / 提取 X-Trace-Id<br>trackClick / trackError 埋点工具<br>data-track 属性自动绑定</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="arch-box diag-backend" style="flex:1;">
+      <div class="arch-title">⚡ 后端入口</div>
+      <div class="arch-sub">traceIdMiddleware（生成 / 沿用 traceId）<br>operationLogMiddleware（每个请求自动记录）<br>CORS exposeHeaders 暴露响应头</div>
+    </div>
+  </div>
+
+  <!-- 第二行：日志分发 -->
+  <div style="margin-top:24px;" class="arch-flow">
+    <div class="arch-box diag-log" style="flex:1;">
+      <div class="arch-title">📝 B 的日志中间件</div>
+      <div class="arch-sub">res.on('finish') → 自动记录<br>maskParams() 递归脱敏敏感字段<br>双写：Pino 文件日志 + MySQL</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="arch-box diag-redis" style="flex:1;">
+      <div class="arch-title">📥 D 的 logService.dispatch()</div>
+      <div class="arch-sub">优先 enqueueLog() 投递 Redis Stream<br>失败自动降级 persistLog() 直写 MySQL<br>**fire-and-forget 不阻塞业务响应**</div>
+    </div>
+  </div>
+
+  <!-- 第三行：存储层 -->
+  <div style="margin-top:24px;gap:24px;display:grid;grid-template-columns:1fr 1fr 1fr;">
+    <div class="arch-box diag-redis">
+      <div class="arch-title">🔴 Redis Stream</div>
+      <div class="arch-sub">XADD 生产 → XREADGROUP 消费<br>消费者组保证至少一次投递<br>落库失败消息保留在 pending</div>
+    </div>
+    <div class="arch-box diag-mysql">
+      <div class="arch-title">🐬 MySQL 主库</div>
+      <div class="arch-sub">error_log（业务/系统/依赖错误）<br>operation_log（全量操作日志）<br>login_log（登录审计）</div>
+    </div>
+    <div class="arch-box" style="border-color:var(--green);background:rgba(63,185,80,.08);">
+      <div class="arch-title">💾 Pino 文件（兜底）</div>
+      <div class="arch-sub">生产：app.log JSON 异步写入<br>开发：pino-pretty 彩色格式化<br>**Redis + MySQL 全挂也不丢日志**</div>
+    </div>
+  </div>
+
+  <div class="notes">用架构图解释完整链路，一个一个模块讲</div>
+</section>
+
+<!-- ============ 8. Section: 核心技术 ============ -->
+<section class="slide section-divider-slide deco-grid" data-deck-label="章节3：核心技术">
+  <div class="chapter">CHAPTER 03</div>
+  <div class="section-title">核心技术深度分析</div>
+  <div class="notes">进入技术细节部分</div>
+</section>
+
+<!-- ============ 9. Logger 选型对比 ============ -->
+<section class="slide deco-grid" data-deck-label="Logger 选型">
+  <div class="eyebrow">PART 1 · LOGGER</div>
+  <h2>日志框架选型：为什么选 Pino？</h2>
+  <table class="compare" style="margin-top:36px;" data-anim="fade-up">
+    <thead>
+      <tr><th>框架</th><th>底层</th><th>JSON 结构化</th><th>异步写入</th><th>性能（ops/s）</th><th>学习成本</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><b>Winston</b></td><td>Node 原生</td><td class="pass">✅ 需配置</td><td class="warn">⚠️ 同步默认</td><td class="warn">~20K</td><td>低</td></tr>
+      <tr><td><b>Bunyan</b></td><td>Node 原生</td><td class="pass">✅ 原生</td><td class="warn">⚠️ 部分同步</td><td class="warn">~50K</td><td>中</td></tr>
+      <tr><td><b>Pino</b></td><td>C++ 底层</td><td class="pass">✅ 原生</td><td class="pass">✅ libuv 异步</td><td class="pass">~300K</td><td>低</td></tr>
+      <tr><td><b>Morgan</b></td><td>Express 中间件</td><td class="fail">❌ 纯文本</td><td class="fail">❌ 同步</td><td>~10K</td><td>极低</td></tr>
+    </tbody>
+  </table>
+  <div class="grid-2" style="margin-top:32px;">
+    <div class="card"><div class="card-title"><span class="emoji">✅</span> Pino 优势</div><div class="card-desc">C++ + libuv 异步、单文件零配置、pino-pretty 开发态、child() 上下文注入、生态成熟（pino-syslog、pino-datadog）</div></div>
+    <div class="card"><div class="card-title"><span class="emoji">⚙️</span> 我们的配置</div><div class="card-desc">开发态 → pino-pretty 彩色控制台；生产态 → JSON 文件 `app.log`，`sync: false` 异步写入；traceId 通过 AsyncLocalStorage 自动注入</div></div>
+  </div>
+  <div class="notes">讲 Pino vs 其他框架，展示性能数据</div>
+</section>
+
+<!-- ============ 10. TraceId 全链路 ============ -->
+<section class="slide deco-grid" data-deck-label="TraceId 全链路">
+  <div class="eyebrow">PART 2 · TRACE ID</div>
+  <h2>全链路追踪：从前端点击到后端落库</h2>
+  <div class="grid-2" style="margin-top:36px;">
+    <div>
+      <h3 style="color:var(--accent-2);margin-bottom:20px;">前端 → 后端</h3>
+      <div class="code-block"><span class="c">// apiClient 自动注入</span>
+<span class="k">async function</span> <span class="n">apiFetch</span>(path, opts) {
+  <span class="k">const headers</span> = {
+    <span class="s">'X-Trace-Id'</span>: <span class="n">getTraceId</span>(),  <span class="c">// localStorage 有则复用</span>
+    <span class="s">'Authorization'</span>: <span class="s">'Bearer '</span> + token
+  }
+  <span class="k">const</span> res = <span class="k">await</span> <span class="n">fetch</span>(fullUrl, { headers })
+  <span class="c">// 响应头回写 → 下次请求继续用同一个</span>
+  res.headers.get(<span class="s">'X-Trace-Id'</span>) &&
+    localStorage.setItem(<span class="s">'traceId'</span>, traceId)
+}</div>
+      <h3 style="color:var(--accent-2);margin:28px 0 16px;">后端存储</h3>
+      <div class="code-block"><span class="k">const</span> traceStorage =
+  <span class="k">new</span> AsyncLocalStorage()
+
+<span class="k">function</span> <span class="n">traceIdMiddleware</span>(req, res, next) {
+  <span class="k">const</span> traceId = req.headers[<span class="s">'x-trace-id'</span>] ?? crypto.<span class="n">randomUUID</span>()
+  req.traceId = traceId
+  res.setHeader(<span class="s">'X-Trace-Id'</span>, traceId)
+  traceStorage.run({ traceId }, () => <span class="n">next</span>())
+}</div>
+    </div>
+    <div>
+      <h3 style="color:var(--accent-2);margin-bottom:20px;">安全设计（D 补充）</h3>
+      <div class="code-block"><span class="k">function</span> <span class="n">normalizeTraceId</span>(raw) {
+  <span class="c">// 只允许字母数字和 .-_ ，防日志注入</span>
+  <span class="k">return</span> /^[A-Za-z0-9._-]+$/.test(raw)
+    && raw.length <= <span class="v">64</span>
+    ? raw : <span class="k">null</span>
+}</div>
+      <h3 style="color:var(--green);margin:28px 0 16px;">✅ 实际效果</h3>
+      <div class="terminal-body" style="font-size:16px;">
+<span class="t-ts">2026-11-10 17:26:33</span> <span class="t-warn">WARN</span> <span class="t-trace">[trace=bec5e74b-02b2-427a-b265-01c621a15455]</span> 登录失败<br>
+<span class="t-ts">├─</span> maskedUsername: <span class="t-info">"ad***in"</span><br>
+<span class="t-ts">├─</span> ip: <span class="t-ip">"::ffff:127.0.0.1"</span><br>
+<span class="t-ts">└─</span> failReason: <span class="t-err">"BAD_CREDENTIALS"</span>
+      </div>
+    </div>
+  </div>
+  <div class="notes">讲 traceId 全链路 + 展示 Pino 实际输出的 traceId</div>
+</section>
+
+<!-- ============ 11. 脱敏设计 ============ -->
+<section class="slide deco-grid" data-deck-label="脱敏">
+  <div class="eyebrow">PART 3 · MASKING</div>
+  <h2>脱敏：敏感字段绝对不能明文落库</h2>
+  <div class="grid-2" style="margin-top:36px;">
+    <div>
+      <h3 style="color:var(--accent-2);margin-bottom:16px;">B 的 mask.ts</h3>
+      <div class="code-block" style="font-size:17px;"><span class="k">const</span> SENSITIVE_KEYS = [
+  <span class="s">'password'</span>, <span class="s">'token'</span>, <span class="s">'mobile'</span>,
+  <span class="s">'phone'</span>, <span class="s">'card'</span>, <span class="s">'secret'</span>,
+  <span class="s">'authorization'</span>, <span class="s">'cookie'</span>,
+  <span class="s">'apikey'</span>, <span class="s">'openid'</span>
+  <span class="c">// ... 30+ 关键词</span>
+]
+
+<span class="k">export function</span> <span class="n">maskParams</span>(obj) {
+  <span class="k">return</span> <span class="n">recurse</span>(obj, <span class="k">false</span>)  <span class="c">// 递归脱敏</span>
+}
+
+<span class="k">export function</span> <span class="n">maskMobile</span>(phone) {
+  <span class="k">return</span> phone.<span class="n">replace</span>(<span class="s">/(\d{3})\d{4}(\d{4})/</span>, <span class="s">'$1****$2'</span>)
+}
+<span class="c">// 13812345678 → 138****5678</span></div>
+    </div>
+    <div>
+      <h3 style="color:var(--green);margin-bottom:16px;">✅ 实测效果（后端日志）</h3>
+      <div class="terminal-body" style="font-size:17px;">
+请求参数：<br>
+<span class="t-info">{</span><br>
+<span class="t-ts">  </span>username: <span class="t-info">"admin"</span>,<br>
+<span class="t-ts">  </span>password: <span class="t-err">"***"</span>, <span class="t-ts">← 已脱敏</span><br>
+<span class="t-ts">  </span>mobile: <span class="t-err">"138****5678"</span>, <span class="t-ts">← 已脱敏</span><br>
+<span class="t-ts">  </span>headers: <span class="t-info">{</span><br>
+<span class="t-ts">    </span>Authorization: <span class="t-err">"****"</span><br>
+<span class="t-ts">  </span><span class="t-info">}</span><br>
+<span class="t-info">}</span>
+      </div>
+      <div class="card" style="margin-top:20px;border-color:var(--red);">
+        <div class="card-title" style="color:var(--red);">⚠️ 硬约束</div>
+        <div class="card-desc"><b>脱敏后不可逆！</b>永远不写反向还原函数。密码在落库前已经是 `***`，审计员也看不到原始内容。</div>
+      </div>
+    </div>
+  </div>
+  <div class="notes">讲脱敏策略，强调不可逆约束</div>
+</section>
+
+<!-- ============ 12. Redis Stream 解耦 ============ -->
+<section class="slide deco-grid" data-deck-label="Redis Stream">
+  <div class="eyebrow">PART 4 · REDIS STREAM</div>
+  <h2>为什么用 Redis Stream 解耦日志写入？</h2>
+  <div class="grid-3" style="margin-top:36px;" data-anim="stagger">
+    <div class="card"><div class="card-title"><span class="emoji">⚡</span> 核心收益</div><div class="card-desc">业务接口不等日志落库就返回。MySQL 慢 / 挂了不影响用户体验，最多日志丢在队列里。</div></div>
+    <div class="card"><div class="card-title"><span class="emoji">🔄</span> 降级策略</div><div class="card-desc">Redis 不可用时 enqueueLog() 返回 false，dispatch() 自动走 persistLog() 直写 MySQL。</div></div>
+    <div class="card"><div class="card-title"><span class="emoji">🔒</span> 消费者组</div><div class="card-desc">XREADGROUP 保证消息至少被消费一次。落库失败不 ACK，消息留在 pending 队列等人工处理。</div></div>
+  </div>
+  <div style="margin-top:36px;">
+    <h3 style="color:var(--accent-2);margin-bottom:16px;">D 的 logService.dispatch() 核心代码</h3>
+    <div class="code-block" style="font-size:18px;"><span class="k">async function</span> <span class="n">dispatch</span>(type, entry) {
+  <span class="k">try</span> {
+    <span class="k">if</span> (<span class="k">await</span> <span class="n">enqueueLog</span>(type, entry)) <span class="k">return</span>   <span class="c">// ✅ Redis 可用</span>
+    <span class="k">await</span> <span class="n">persistLog</span>(type, entry)   <span class="c">// ⬇️ 降级直写</span>
+  } <span class="k">catch</span> (error) {
+    <span class="n">log</span>.ERROR(<span class="s">`保存${type}日志失败: ${error}`</span>)  <span class="c">// 💡 吞异常，不阻塞业务</span>
+  }
+}</div>
+  </div>
+  <div class="notes">讲 Redis Stream 设计 + 降级策略 + 为什么不阻塞</div>
+</section>
+
+<!-- ============ 13. 日志查询 & 审计 ============ -->
+<section class="slide deco-grid" data-deck-label="查询与审计">
+  <div class="eyebrow">PART 5 · QUERY & AUDIT</div>
+  <h2>D 实现的查询接口（管理员权限）</h2>
+  <div class="grid-2" style="margin-top:36px;">
+    <div>
+      <h3 style="color:var(--accent-2);margin-bottom:16px;">📋 核心 API</h3>
+      <div class="code-block" style="font-size:17px;">
+<span class="c">// 公开：前端埋点</span>
+POST /api/v1/logs/operation      <span class="c">// trackClick 上报</span>
+POST /api/v1/logs/error          <span class="c">// trackError 上报</span>
+
+<span class="c">// 管理员：分页查询</span>
+GET  /api/v1/logs/operation      <span class="c">// traceId / userId / time 过滤</span>
+GET  /api/v1/logs/error
+GET  /api/v1/logs/login
+
+<span class="c">// 🔥 全链路追踪</span>
+GET  /api/v1/logs/trace/:traceId <span class="c">// 串联三类日志时间线</span>
+
+<span class="c">// 🔒 审计接口</span>
+GET  /api/v1/analytics/audit/login-abnormal    <span class="c">// 1小时≥3次失败</span>
+GET  /api/v1/analytics/audit/sensitive-ops     <span class="c">// 删除景点等敏感操作</span>
+
+<span class="c">// 📊 行为分析 + 推荐铺垫</span>
+GET  /api/v1/analytics/behaviors/hot-pois      <span class="c">// 热门景点 Top10</span>
+GET  /api/v1/analytics/behaviors/active-hours  <span class="c">// 活跃时段分布</span>
+GET  /api/v1/analytics/recommend/related-pois  <span class="c">// 相关景点推荐</span>
+      </div>
+    </div>
+    <div>
+      <h3 style="color:var(--green);margin-bottom:16px;">✅ 全链路 Trace 查询效果</h3>
+      <div class="terminal-body" style="font-size:16px;">
+<span class="t-info">GET /api/v1/logs/trace/bec5e74b-...</span><br><br>
+<span class="t-info">{</span><br>
+<span class="t-ts">  </span>traceId: <span class="s">"bec5e74b-02b2-427a-..."</span>,<br>
+<span class="t-ts">  </span>operationCount: <span class="v">7</span>,<br>
+<span class="t-ts">  </span>errorCount: <span class="v">0</span>,<br>
+<span class="t-ts">  </span>loginCount: <span class="v">1</span>,<br>
+<span class="t-ts">  </span>timeline: [<br>
+<span class="t-ts">    </span>{ <span class="n">17:26:33</span> } <span class="t-ip">login_log</span> <span class="t-warn">fail_bad_credentials</span>,<br>
+<span class="t-ts">    </span>{ <span class="n">17:26:34</span> } <span class="t-ip">operation_log</span> <span class="t-info">GET /api/v1/poi 500</span>,<br>
+<span class="t-ts">    </span>{ <span class="n">17:26:35</span> } <span class="t-ip">operation_log</span> <span class="t-info">GET /api/v1/home 500</span>,<br>
+<span class="t-ts">    </span>{ <span class="n">17:26:36</span> } <span class="t-ip">operation_log</span> <span class="t-info">POST /logs/operation 200</span>,<br>
+<span class="t-ts">    </span>...<br>
+<span class="t-ts">  ]</span><br>
+<span class="t-info">}</span>
+      </div>
+    </div>
+  </div>
+  <div class="notes">讲查询接口 + 全链路 trace 查询怎么串联三类日志</div>
+</section>
+
+<!-- ============ 14. Section: Demo ============ -->
+<section class="slide section-divider-slide deco-grid" data-deck-label="章节4：Demo">
+  <div class="chapter">CHAPTER 04</div>
+  <div class="section-title">现场演示</div>
+  <div class="notes">进入 Demo 环节</div>
+</section>
+
+<!-- ============ 15. Demo ============ -->
+<section class="slide deco-grid" data-deck-label="现场 Demo">
+  <div class="eyebrow">LIVE DEMO</div>
+  <h2>后端真实日志输出</h2>
+  <div style="margin-top:32px;">
+    <div class="terminal-header"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:12px;color:var(--text-dim);font-family:var(--mono);">npm run dev · backend</span></div>
+    <div class="terminal-body" style="font-size:16px;max-height:480px;overflow-y:auto;">
+<span class="t-ts">◇ injected env from .env</span><br>
+<span class="t-info">INFO MySQL master 连接池已创建 127.0.0.1:3306/scenic_ai</span><br>
+<span class="t-info">INFO Redis 已连接 redis://127.0.0.1:6379</span><br>
+<span class="t-info">INFO 日志消费者已启动 stream=scenic:log:stream group=log-writer</span><br>
+<span class="t-info">INFO 后端服务已启动: http://localhost:8000</span><br><br>
+<span class="t-warn">WARN  登录失败 <span class="t-trace">[trace=bec5e74b-02b2-427a-b265-01c621a15455]</span></span><br>
+<span class="t-ts">      maskedUsername: <span class="t-info">"ad***in"</span></span><br>
+<span class="t-ts">      ip: <span class="t-ip">"::ffff:127.0.0.1"</span></span><br>
+<span class="t-ts">      failReason: <span class="t-err">"BAD_CREDENTIALS"</span></span><br>
+<span class="t-err">ERROR 日志落库失败 id=1794302793551-0 <span class="t-trace">[trace=bec5e74b...]</span></span><br>
+<span class="t-ts">      ↳ MySQL 3306 root 密码不对，但 Redis Stream 消费者拉到了消息</span><br>
+<span class="t-ts">      ↳ 消息保留在 pending 队列，不丢失！</span><br><br>
+<span class="t-warn">WARN  登录拦截：参数缺失 <span class="t-trace">[trace=31958160-f304-4c8f-83e8-c44420ceebce]</span></span><br>
+<span class="t-ts">      maskedUsername: <span class="t-info">"ad***in"</span></span><br><br>
+<span class="t-err">ERROR POI 列表异常: Access denied for user 'root'@'localhost'</span><br>
+<span class="t-err">ERROR 日志落库失败 id=1794302793603-0</span><br>
+<span class="t-info">INFO MySQL slave 连接池已创建 127.0.0.1:3306/scenic_ai</span>
+    </div>
+  </div>
+  <div class="meta" style="margin-top:24px;">💡 从真实日志可以看到 <span class="t-info">脱敏生效</span>、<span class="t-info">traceId 全链路</span>、<span class="t-warn">降级策略</span>、<span class="t-err">错误捕获</span> 四大亮点</div>
+  <div class="notes">切换到真实终端演示，这张 slide 是讲解底稿</div>
+</section>
+
+<!-- ============ 16. Section: 总结 ============ -->
+<section class="slide section-divider-slide deco-grid" data-deck-label="章节5：总结">
+  <div class="chapter">CHAPTER 05</div>
+  <div class="section-title">踩坑总结 & Takeaways</div>
+  <div class="notes">进入总结</div>
+</section>
+
+<!-- ============ 17. 踩坑 ============ -->
+<section class="slide deco-grid" data-deck-label="踩坑总结">
+  <div class="eyebrow">LESSONS LEARNED</div>
+  <h2>合并过程中我们踩了这些坑</h2>
+  <div class="grid-2" style="margin-top:36px;" data-anim="stagger">
+    <div class="card"><div class="card-title"><span class="emoji">🔁</span> 三方各写 traceId middleware</div><div class="card-desc">最终合并：C 的 AsyncLocalStorage + D 的安全校验 + B 的 logger 集成。<b>不能各自为战，统一规范！</b></div></div>
+    <div class="card"><div class="card-title"><span class="emoji">⚠️</span> 同时 declare Express.Request.user</div><div class="card-desc">C 的 middleware/auth.ts 和 D 的 authGuard.ts 同时声明但类型不同 → tsc 报错。<b>全局类型声明只能一处！</b></div></div>
+    <div class="card"><div class="card-title"><span class="emoji">🔧</span> MySQL 端口假设错误</div><div class="card-desc">B 假设 3307，本地实际跑在 3306。改 .env 后 tsx watch 不会重读 .env，需彻底重启。<b>端口别硬编码，config 里统一读。</b></div></div>
+    <div class="card"><div class="card-title"><span class="emoji">🏷️</span> ESM import 必须带 .js</div><div class="card-desc">TypeScript 源码里 `import { x } from './foo.js'` 不是 `'./foo'`。<b>tsx 虽然宽松但 ESM 规范必须遵守。</b></div></div>
+  </div>
+  <div class="notes">分享踩坑经验，让同学避开相同问题</div>
+</section>
+
+<!-- ============ 18. Takeaways ============ -->
+<section class="slide deco-grid" data-deck-label="Takeaways">
+  <div class="eyebrow">KEY TAKEAWAYS</div>
+  <h2>核心收获（请记住这 4 点）</h2>
+  <div class="grid-4" style="margin-top:48px;" data-anim="stagger">
+    <div class="card" style="border-color:var(--accent);"><div class="stat-num" style="font-size:48px;">1</div><div class="card-title" style="color:var(--accent);">日志即财富</div><div class="card-desc">没有日志的线上 = 盲人摸象。哪怕 console.log 也比没日志强。</div></div>
+    <div class="card" style="border-color:var(--green);"><div class="stat-num" style="font-size:48px;color:var(--green);">2</div><div class="card-title" style="color:var(--green);">链路追踪先行</div><div class="card-desc">traceId 从前端埋 → 后端传 → 数据库查，一次请求一次 ID 串联到底。</div></div>
+    <div class="card" style="border-color:var(--yellow);"><div class="stat-num" style="font-size:48px;color:var(--yellow);">3</div><div class="card-title" style="color:var(--yellow);">脱敏不可逆</div><div class="card-desc">敏感字段落库前必须 mask，并且永远不写还原函数。这是硬约束。</div></div>
+    <div class="card" style="border-color:var(--purple);"><div class="stat-num" style="font-size:48px;color:var(--purple);">4</div><div class="card-title" style="color:var(--purple);">降级兜底</div><div class="card-desc">Redis 挂了降级 MySQL，MySQL 挂了降级 Pino 文件。多层兜底 = 永不丢日志。</div></div>
+  </div>
+  <div class="notes">最后总结四个核心 Takeaways</div>
+</section>
+
+<!-- ============ 19. Q&A ============ -->
+<section class="slide section-divider-slide deco-grid" data-deck-label="Q&A">
+  <div class="chapter">THANK YOU</div>
+  <div class="section-title">Q & A</div>
+  <div class="meta" style="margin-top:40px;">欢迎提问 · 第八组 · 2026</div>
+  <div class="notes">Q&A 环节</div>
+</section>
+
+</deck-stage>
+
+<script>
+// ============ Deck Runtime ============
+const deck = document.querySelector('deck-stage');
+const slides = document.querySelectorAll('.slide');
+let current = 0;
+
+function go(i) {
+  if (i < 0 || i >= slides.length) return;
+  slides[current].classList.remove('active');
+  current = i;
+  slides[current].classList.add('active');
+  updateProgress();
+}
+
+function updateProgress() {
+  const progress = document.getElementById('prog');
+  if (progress) progress.style.width = ((current + 1) / slides.length * 100) + '%';
+}
+
+// Keyboard
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') go(current + 1);
+  else if (e.key === 'ArrowLeft') go(current - 1);
+  else if (e.key === 'f' || e.key === 'F') {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+    else document.exitFullscreen();
+  }
+});
+
+// Scale deck to viewport
+function scale() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const scaleX = w / 1920;
+  const scaleY = h / 1080;
+  const s = Math.min(scaleX, scaleY);
+  deck.style.transform = `scale(${s})`;
+  deck.style.left = ((w - 1920 * s) / 2) + 'px';
+  deck.style.top = ((h - 1080 * s) / 2) + 'px';
+}
+window.addEventListener('resize', scale);
+
+// Progress bar
+const prog = document.createElement('div');
+prog.id = 'prog';
+prog.className = 'progress';
+document.body.appendChild(prog);
+
+// Init
+scale();
+slides[0].classList.add('active');
+updateProgress();
+</script>
+</body>
+</html>
