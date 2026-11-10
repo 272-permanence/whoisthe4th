@@ -27,15 +27,8 @@ export interface AuthUser {
   role: string;
 }
 
-/** 扩展 Express Request，挂载认证用户 */
-declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace Express {
-    interface Request {
-      user?: AuthUser;
-    }
-  }
-}
+// 注意：不再声明 global Express.Request.user，避免与 C 的 middleware/auth.ts 类型冲突
+// 使用本守卫时通过类型断言访问 req.user as AuthUser
 
 /**
  * 登录校验中间件
@@ -68,7 +61,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     role = parts[2] || roleHeader;
   }
 
-  req.user = { userId, username, role };
+  (req as unknown as { user: AuthUser }).user = { userId, username, role };
   next();
 }
 
@@ -78,7 +71,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
  */
 export function requireRole(roles: string[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
-    const user = req.user;
+    const user = (req as unknown as { user: AuthUser }).user;
     if (!user) {
       res.status(401).json({ code: 40101, message: '未登录或登录已过期' });
       return;

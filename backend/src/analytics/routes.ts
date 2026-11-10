@@ -9,8 +9,8 @@ import { Router, type Request, type Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
 import type Redis from 'ioredis';
-import { executeRead, executeWrite } from './db.js';
-import { analyzeSentiment, SENTIMENT_MODEL } from './sentiment.js';
+import { executeRead, executeWrite, getDb } from './db.js';
+import { analyzeSentiment } from './sentiment.js';
 import { sseBroker } from './sse-broker.js';
 import { ErrorCodeEnum } from '../common/errorCodes.js';
 import { createLogger } from '../common/logger.js';
@@ -513,13 +513,3 @@ router.get('/recommend/related-pois', async (req: Request, res: Response) => {
 });
 
 export default router;
-
-// --- 以下为兼容 B 的 better-sqlite3 getDb()（computeStats 等本地统计接口使用） ---
-// TODO(D): 后续统一迁到 mysql2 executeRead
-function getDb() {
-  // 延迟导入避免循环依赖
-  const mod = require('./db.js') as { getLocalDb?: () => unknown };
-  if (typeof mod.getLocalDb === 'function') return mod.getLocalDb();
-  // 降级：返回 null，computeStats 会报错但不影响启动
-  throw new Error('本地 SQLite 未就绪，请调用 initAnalyticsTables()');
-}

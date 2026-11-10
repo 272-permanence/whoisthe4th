@@ -39,7 +39,7 @@ import poiRouter from './routes/poi.js';
 import logsRouter from './routes/logs.js';
 
 // ========== 初始化函数 & 中间件 ==========
-import { initTables as initAnalyticsTables, closeDb } from './analytics/db.js';
+import { initAnalyticsTables, closeDb } from './analytics/db.js';
 import { initTables as initLostFoundTables } from './lostFound/db.js';
 import { initTables as initLogTables } from './services/logService.js';
 import { startLogQueueConsumer, stopLogQueueConsumer } from './services/logQueue.js';
