@@ -588,6 +588,68 @@ function resizeCharts() {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* 移动端适配：窄屏下单列布局，卡片两列排布 */
+@media (max-width: 768px) {
+  .dashboard {
+    padding: 16px 12px;
+  }
+
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    margin-bottom: 16px;
+  }
+
+  .dashboard-header h1 {
+    font-size: 18px;
+    letter-spacing: 1px;
+  }
+
+  .stat-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .card {
+    padding: 16px 8px;
+  }
+
+  .card-value {
+    font-size: 28px;
+  }
+
+  .charts {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .full-width {
+    grid-column: span 1;
+  }
+
+  .chart {
+    height: 260px;
+  }
+
+  .tab-btn {
+    flex: 1;
+    padding: 8px 0;
+    text-align: center;
+  }
+
+  .audit-table {
+    font-size: 12px;
+  }
+
+  .audit-table th,
+  .audit-table td {
+    padding: 8px 6px;
+  }
+}
 </style>
 
 <style>
