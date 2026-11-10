@@ -45,6 +45,8 @@ async function sendLog(endpoint: string, payload: unknown): Promise<void> {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        // 后端只认请求头里的 traceId（body.traceId 不生效），这里必须显式带上
+        'X-Trace-Id': getTraceId(),
       },
       body: JSON.stringify(payload),
       // 忽略响应（埋点不阻塞业务逻辑，页面关闭时也能发出）
