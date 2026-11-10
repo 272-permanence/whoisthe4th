@@ -7,7 +7,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { config } from '../config.js';
-import { handleTranscribe, handleTtsStream } from '../controllers/asrTtsController.js';
+import { handleTranscribe } from '../controllers/asrTtsController.js';
 
 const upload = multer({
   // 音频体积较小，直接放内存，避免落盘带来的清理成本
@@ -20,7 +20,14 @@ const router = Router();
 /** 语音转文字：multipart/form-data，音频字段名固定为 audio */
 router.post('/asr', upload.single('audio'), handleTranscribe);
 
-/** 文字转语音：SSE 流式接口，text 通过查询参数传入 */
-router.get('/tts/stream', handleTtsStream);
+/**
+ * 旧的 TTS SSE 路径（带多余的 asr-tts 前缀），重定向到新的 /api/v1/tts/stream。
+ * 保留一个版本再删 —— 等全组客户端都改完就移掉。
+ */
+router.get('/tts/stream', (req, res) => {
+  const rawText = req.query.text;
+  const text = typeof rawText === 'string' ? rawText : '';
+  res.redirect(307, '/api/v1/tts/stream?text=' + encodeURIComponent(text));
+});
 
 export default router;

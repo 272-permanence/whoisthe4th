@@ -11,6 +11,7 @@ import { config } from './config.js';
 import chatRouter from './routes/chat.js';
 import analyticsRouter from './analytics/routes.js';
 import asrTtsRouter from './routes/asrTts.js';
+import ttsRouter from './routes/tts.js';
 import kbRouter from './routes/kb.js';
 import lostFoundRouter from './routes/lostFound.js';
 import homeRouter from './routes/home.js';
@@ -37,6 +38,7 @@ app.use(express.json());
 app.use('/api/v1/chat', chatRouter);
 app.use('/api/v1/analytics', analyticsRouter);
 app.use('/api/v1/asr-tts', asrTtsRouter);
+app.use('/api/v1/tts', ttsRouter);
 app.use('/api/v1/kb', kbRouter);
 app.use('/api/v1/lost-found', lostFoundRouter);
 app.use('/api/v1/home', homeRouter);
@@ -72,7 +74,7 @@ async function bootstrap(): Promise<void> {
     app.listen(config.port, () => {
       log.INFO(`后端服务已启动: http://localhost:${config.port}`);
       log.INFO(`允许跨域的前端地址: ${config.frontendUrl}`);
-      log.INFO('语音交互接口: POST /api/v1/asr-tts/asr | GET /api/v1/asr-tts/tts/stream (SSE)');
+      log.INFO('语音交互接口: POST /api/v1/asr-tts/asr | GET /api/v1/tts/stream (新) | GET /api/v1/asr-tts/tts/stream (旧，redirect)');
     });
   } catch (error) {
     log.ERROR(`后端服务启动失败: ${String(error)}`);
