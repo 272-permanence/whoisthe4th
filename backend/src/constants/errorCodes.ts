@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file 业务错误码常量
  * @author 第八组（成员A）
  * @date 2026-10-15
@@ -11,6 +11,8 @@ export const ErrorCodeEnum = {
   INVALID_AUDIO: 40002,
   /** 上传文件超出体积上限 */
   PAYLOAD_TOO_LARGE: 40003,
+  /** 资源不存在 */
+  NOT_FOUND: 40401,
 
   // ---- 认证授权（成员C） ----
   /** 未登录 / Token 缺失或过期 */

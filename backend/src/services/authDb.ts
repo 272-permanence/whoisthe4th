@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file 成员C 专属数据库：auth.db
  * @author 第八组（成员C）
  * @date 2026-11-03
@@ -12,6 +12,11 @@ import { fileURLToPath } from 'node:url';
 import { createLogger } from '../common/logger.js';
 
 const logger = createLogger('auth-db');
+
+// ============ 内容管理（成员C的 content/adminContent 路由使用） ============
+export type ContentType = 'carousel' | 'scenic' | 'route' | 'announcement' | 'about';
+
+// ============ 用户/商品（成员C的 c-auth-product 分支） ============
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
