@@ -9,8 +9,11 @@
 import { getTraceId } from '../common/apiClient';
 import { API_BASE_URL } from '../constants/apiConstants';
 
-/** 埋点后端接口（直接用 fetch，不走 apiFetch 的 envelope 解包） */
+/** 埋点后端接口：操作日志（直接用 fetch，不走 apiFetch 的 envelope 解包） */
 const LOG_ENDPOINT = `${API_BASE_URL}/api/v1/logs/operation`;
+
+/** 埋点后端接口：错误日志 */
+const ERROR_LOG_ENDPOINT = `${API_BASE_URL}/api/v1/logs/error`;
 
 /** 每条埋点日志的通用结构 */
 export interface TrackLogPayload {
@@ -32,22 +35,23 @@ function getCurrentPagePath(): string {
 
 /**
  * 统一发送埋点（内部方法，对外通过 trackClick / trackError 间接调用）
- * 用 fetch 直接发送，不走 apiFetch 的 envelope 解包，因为后端日志接口不一定返回标准 {code, data} 结构。
+ * 用 fetch 直接发送，不走 apiFetch 的 envelope 解包，因为埋点是 best-effort 的旁路请求。
+ * @param endpoint 目标接口地址
+ * @param payload 日志内容
  */
-async function sendLog(payload: TrackLogPayload): Promise<void> {
+async function sendLog(endpoint: string, payload: unknown): Promise<void> {
   try {
-    await fetch(LOG_ENDPOINT, {
+    await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Trace-Id': payload.traceId,
       },
       body: JSON.stringify(payload),
-      // 忽略响应（埋点是 best-effort，不阻塞业务逻辑）
+      // 忽略响应（埋点不阻塞业务逻辑，页面关闭时也能发出）
       keepalive: true,
     });
   } catch (e) {
-    // 埋点失败只打 console，不向上抛
+    // 埋点失败只打 console，不向上抛，避免触发错误上报的死循环
     console.warn('[track] 埋点上报失败', e);
   }
 }
@@ -72,7 +76,7 @@ export function trackClick(
     timestamp: Date.now(),
     extra,
   };
-  void sendLog(payload);
+  void sendLog(LOG_ENDPOINT, payload);
 }
 
 /**
@@ -118,23 +122,21 @@ export function trackAutoBind(): void {
 }
 
 /**
- * JS 错误上报（全局捕获用）
+ * JS 错误上报（全局捕获用），发往后端错误日志接口 /api/v1/logs/error
  * @param error 捕获到的 Error 对象
  * @param extra 额外自定义字段
  */
 export function trackError(error: Error, extra?: Record<string, unknown>): void {
-  const payload: TrackLogPayload = {
+  const { source, ...rest } = extra ?? {};
+  const payload = {
     traceId: getTraceId(),
-    action: 'error',
-    resourceId: error.name || 'JSError',
-    resourceType: 'js-error',
+    errorName: error.name || 'Error',
+    errorMessage: error.message,
+    stack: error.stack,
     pagePath: getCurrentPagePath(),
+    source: typeof source === 'string' ? source : undefined,
     timestamp: Date.now(),
-    extra: {
-      message: error.message,
-      stack: error.stack,
-      ...extra,
-    },
+    extra: rest,
   };
-  void sendLog(payload);
+  void sendLog(ERROR_LOG_ENDPOINT, payload);
 }
