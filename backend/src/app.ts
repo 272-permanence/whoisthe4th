@@ -45,6 +45,7 @@ import { initTables as initLogTables } from './services/logService.js';
 import { startLogQueueConsumer, stopLogQueueConsumer } from './services/logQueue.js';
 import { initRedis, closeRedis } from './common/redis.js';
 import { traceIdMiddleware } from './middleware/traceId.js';
+import { authMiddleware } from './middleware/auth.js';
 
 const log = createLogger('app');
 const app = express();
@@ -60,6 +61,9 @@ app.use(express.json());
 
 // 全链路追踪：确定 traceId 并写入 req.traceId + 响应头（放在所有中间件与业务路由之前）
 app.use(traceIdMiddleware);
+
+// 全局 JWT 解析：有合法 token 自动填充 req.user，无 token 放行（强制登录由各路由 requireAuth 完成）
+app.use(authMiddleware);
 
 // ========== 静态托管：用户端可直接访问后台上传的图片 ==========
 app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d' }));
