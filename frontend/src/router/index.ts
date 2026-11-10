@@ -25,11 +25,11 @@ const routes = [
         component: () => import('../views/mobile/HomePage.vue'),
         meta: { title: '首页' },
       },
-      // AI 导览 Tab → 复用成员 A 已有的交互页
+      // AI 导览 Tab → 移动端专属语音聊天页（成员A 新建 MobileChat.vue）
       {
         path: 'interaction',
         name: 'mobile-interaction',
-        component: () => import('../views/InteractionView.vue'),
+        component: () => import('../views/mobile/MobileChat.vue'),
         meta: { title: 'AI 导览' },
       },
       {
