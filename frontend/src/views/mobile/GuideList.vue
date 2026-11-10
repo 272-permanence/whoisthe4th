@@ -9,6 +9,7 @@ import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { showToast, showLoadingToast, closeToast } from 'vant';
 import { fetchRoutes, type RouteSummary } from '../../api/guide';
+import { trackAutoBind } from '../../utils/track';
 
 const router = useRouter();
 const routes = ref<RouteSummary[]>([]);
@@ -38,7 +39,10 @@ function goDetail(id: number) {
   router.push(`/routes/${id}`);
 }
 
-onMounted(load);
+onMounted(() => {
+  load();
+  trackAutoBind();
+});
 </script>
 
 <template>
@@ -50,6 +54,7 @@ onMounted(load);
         v-for="r in routes"
         :key="r.id"
         class="route-card"
+        :data-track="`guide-card:${r.id}`"
         @click="goDetail(r.id)"
       >
         <div class="route-head">

@@ -9,6 +9,7 @@ import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { showToast, showLoadingToast, closeToast } from 'vant';
 import { fetchRouteDetail, type RouteDetail } from '../../api/guide';
+import { trackAutoBind } from '../../utils/track';
 
 const route = useRoute();
 const detail = ref<RouteDetail | null>(null);
@@ -45,7 +46,10 @@ async function load() {
   }
 }
 
-onMounted(load);
+onMounted(() => {
+  load();
+  trackAutoBind();
+});
 </script>
 
 <template>
@@ -75,6 +79,7 @@ onMounted(load);
         v-for="step in detail.steps"
         :key="step.poi_id"
         class="step-item"
+        :data-track="`poi-step:${step.poi_id}`"
       >
         <div class="step-seq">{{ step.seq }}</div>
         <div class="step-body">
