@@ -61,10 +61,14 @@ export async function loginApi(
   if (!res.ok || payload.code !== 0) {
     throw new Error(payload.message || `HTTP ${res.status}`);
   }
-  // 持久化 token 和 user
-  localStorage.setItem('token', payload.data.token);
-  localStorage.setItem('user', JSON.stringify(payload.data.user));
+  persistLogin(payload.data);
   return payload.data;
+}
+
+/** 登录成功后统一落本地存储（所有登录通道共用） */
+function persistLogin(data: LoginResult): void {
+  localStorage.setItem('token', data.token);
+  localStorage.setItem('user', JSON.stringify(data.user));
 }
 
 /** 注册（开放注册强制 user 角色） */
@@ -120,4 +124,127 @@ export function getCachedUser(): LoginUser | null {
 
 export function getCachedToken(): string | null {
   return localStorage.getItem('token');
+}
+
+// ========================== 统一身份认证 ==========================
+
+/** 各登录通道当前模式（mock / real），用于页面上「演示模式」提示 */
+export interface ProviderStatus {
+  password: { enabled: boolean; mode: string };
+  email: { enabled: boolean; mode: string; exposeCode: boolean };
+  wechat: { enabled: boolean; mode: string };
+  sso: { enabled: boolean; mode: string; url: string; clientId: string };
+  cert: { enabled: boolean; mode: string };
+}
+
+/** 发送邮箱验证码的返回 */
+export interface EmailCodeResult {
+  expiresIn: number;
+  cooldownSec: number;
+  mock: boolean;
+  devCode?: string;
+}
+
+/** 微信扫码会话 */
+export interface WechatQrResult {
+  sceneId: string;
+  qrText: string;
+  expiresIn: number;
+  mock: boolean;
+}
+
+export type WechatQrStatus = 'pending' | 'scanned' | 'confirmed' | 'expired';
+
+/** 扫码轮询结果：confirmed 时会带上登录态 */
+export interface WechatQrPollResult {
+  status: WechatQrStatus;
+  expiresIn: number;
+  user?: LoginUser;
+  token?: string;
+}
+
+async function postJson<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${AUTH_BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body ?? {})
+  });
+  const payload = (await res.json()) as ApiResult<T>;
+  if (!res.ok || payload.code !== 0) {
+    throw new Error(payload.message || `HTTP ${res.status}`);
+  }
+  return payload.data;
+}
+
+/** 查询各登录通道状态（失败时回退为全部 mock，不阻塞页面） */
+export async function getProvidersApi(): Promise<ProviderStatus | null> {
+  try {
+    const res = await fetch(`${AUTH_BASE}/providers`);
+    const payload = (await res.json()) as ApiResult<ProviderStatus>;
+    if (!res.ok || payload.code !== 0) return null;
+    return payload.data;
+  } catch {
+    return null;
+  }
+}
+
+/** 发送邮箱验证码（mock 模式下 devCode 直接返回给页面展示） */
+export function sendEmailCodeApi(email: string): Promise<EmailCodeResult> {
+  return postJson<EmailCodeResult>('/email/code', { email });
+}
+
+/** 邮箱验证码登录（首次登录自动注册为普通用户） */
+export async function emailLoginApi(email: string, code: string): Promise<LoginResult> {
+  const data = await postJson<LoginResult>('/email/login', { email, code });
+  persistLogin(data);
+  return data;
+}
+
+/** 创建微信扫码会话 */
+export function createWechatQrApi(): Promise<WechatQrResult> {
+  return postJson<WechatQrResult>('/wechat/qr');
+}
+
+/** 轮询扫码状态，确认后写入登录态 */
+export async function pollWechatQrApi(sceneId: string): Promise<WechatQrPollResult> {
+  const res = await fetch(`${AUTH_BASE}/wechat/qr/${encodeURIComponent(sceneId)}`);
+  const payload = (await res.json()) as ApiResult<WechatQrPollResult>;
+  if (!res.ok || payload.code !== 0) {
+    throw new Error(payload.message || `HTTP ${res.status}`);
+  }
+  const data = payload.data;
+  if (data.status === 'confirmed' && data.token && data.user) {
+    persistLogin({ token: data.token, user: data.user });
+  }
+  return data;
+}
+
+/** 模拟手机扫码 */
+export function mockWechatScanApi(sceneId: string): Promise<{ status: string }> {
+  return postJson<{ status: string }>(`/wechat/qr/${encodeURIComponent(sceneId)}/mock-scan`);
+}
+
+/** 模拟手机确认登录 */
+export function mockWechatConfirmApi(sceneId: string): Promise<{ status: string }> {
+  return postJson<{ status: string }>(`/wechat/qr/${encodeURIComponent(sceneId)}/mock-confirm`);
+}
+
+/** 模拟统一认证回调，直接换取登录态 */
+export async function ssoMockLoginApi(ticket?: string): Promise<LoginResult> {
+  const data = await postJson<LoginResult>('/sso/mock-login', { ticket });
+  persistLogin(data);
+  return data;
+}
+
+/** 上传证书文件登录 */
+export async function certLoginApi(file: File): Promise<LoginResult> {
+  const form = new FormData();
+  form.append('cert', file);
+  const res = await fetch(`${AUTH_BASE}/cert/login`, { method: 'POST', body: form });
+  const payload = (await res.json()) as ApiResult<LoginResult>;
+  if (!res.ok || payload.code !== 0) {
+    throw new Error(payload.message || `HTTP ${res.status}`);
+  }
+  persistLogin(payload.data);
+  return payload.data;
 }

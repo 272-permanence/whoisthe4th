@@ -85,11 +85,38 @@ function initTables(database: Database.Database): void {
 /** 给已有的旧表补列（幂等） */
 function migrateSchema(database: Database.Database): void {
   // admin_user.status
-  try { database.prepare('SELECT status FROM admin_user LIMIT 1').run(); }
-  catch { database.exec(`ALTER TABLE admin_user ADD COLUMN status TEXT NOT NULL DEFAULT 'active'`); }
+  addColumn(database, 'admin_user', 'status', "TEXT NOT NULL DEFAULT 'active'");
   // product.published
-  try { database.prepare('SELECT published FROM product LIMIT 1').run(); }
-  catch { database.exec('ALTER TABLE product ADD COLUMN published INTEGER NOT NULL DEFAULT 1'); }
+  addColumn(database, 'product', 'published', 'INTEGER NOT NULL DEFAULT 1');
+
+  // ---------- 统一身份认证：第三方身份标识（均可为空） ----------
+  addColumn(database, 'admin_user', 'email', 'TEXT');
+  addColumn(database, 'admin_user', 'wechat_openid', 'TEXT');
+  addColumn(database, 'admin_user', 'sso_uid', 'TEXT');
+  addColumn(database, 'admin_user', 'cert_fingerprint', 'TEXT');
+
+  // SQLite 唯一索引允许多个 NULL，天然兼容「一个用户只绑定一种外部身份」
+  database.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_user_email ON admin_user(email);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_user_wechat ON admin_user(wechat_openid);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_user_sso ON admin_user(sso_uid);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_user_cert ON admin_user(cert_fingerprint);
+  `);
+}
+
+/**
+ * 幂等补列：列已存在则跳过
+ * @param database 数据库连接
+ * @param table 表名
+ * @param column 列名
+ * @param ddl 列定义（列名之后的 SQL 片段）
+ */
+function addColumn(database: Database.Database, table: string, column: string, ddl: string): void {
+  try {
+    database.prepare(`SELECT ${column} FROM ${table} LIMIT 1`).run();
+  } catch {
+    database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+  }
 }
 
 function seedDefaultAdmin(database: Database.Database): void {

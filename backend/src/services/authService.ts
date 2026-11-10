@@ -11,6 +11,17 @@ import { config } from '../config.js';
 export type UserRole = 'admin' | 'user';
 export type UserStatus = 'active' | 'disabled';
 
+/** 统一身份认证提供方 */
+export type ExternalProvider = 'email' | 'wechat' | 'sso' | 'cert';
+
+/** 提供方 → admin_user 身份标识列 */
+const EXTERNAL_COLUMN: Record<ExternalProvider, string> = {
+  email: 'email',
+  wechat: 'wechat_openid',
+  sso: 'sso_uid',
+  cert: 'cert_fingerprint'
+};
+
 export interface JwtPayload {
   uid: number;
   username: string;
@@ -24,11 +35,16 @@ export interface UserRecord {
   role: UserRole;
   nickname: string | null;
   status: UserStatus;
+  email: string | null;
+  wechat_openid: string | null;
+  sso_uid: string | null;
+  cert_fingerprint: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export type SafeUser = Omit<UserRecord, 'password_hash'>;
+/** 对外安全的用户信息（不含密码哈希与外部身份标识） */
+export type SafeUser = Omit<UserRecord, 'password_hash' | 'wechat_openid' | 'sso_uid' | 'cert_fingerprint'>;
 
 export function signToken(payload: JwtPayload): string {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -86,8 +102,66 @@ export function findUserByUsername(username: string): Pick<SafeUser, 'id' | 'use
 }
 
 function toSafeUser(u: UserRecord): SafeUser {
-  const { password_hash: _omit, ...rest } = u;
-  return rest;
+  return {
+    id: u.id,
+    username: u.username,
+    role: u.role,
+    nickname: u.nickname,
+    status: u.status,
+    email: u.email ?? null,
+    created_at: u.created_at,
+    updated_at: u.updated_at
+  };
+}
+
+/**
+ * 第三方 / 统一认证登录：按身份标识查用户，首次登录自动建号（无密码）
+ * @param provider 认证提供方
+ * @param identifier 该提供方下的唯一标识（邮箱 / openid / SSO uid / 证书指纹）
+ * @param nickname 首次建号时使用的昵称
+ */
+export function loginByExternal(
+  provider: ExternalProvider,
+  identifier: string,
+  nickname?: string
+): { user: SafeUser; token: string } | { error: string } {
+  const db = getAuthDb();
+  const column = EXTERNAL_COLUMN[provider];
+  let user = db.prepare(`SELECT * FROM admin_user WHERE ${column} = ?`).get(identifier) as UserRecord | undefined;
+
+  if (!user) {
+    const username = buildExternalUsername(provider, identifier);
+    // 外部登录账号不设置密码，password_hash 存空串，账号密码通道永远无法登录
+    const result = db
+      .prepare(
+        `INSERT INTO admin_user (username, password_hash, role, nickname, status, ${column})
+         VALUES (?, '', 'user', ?, 'active', ?)`
+      )
+      .run(username, nickname ?? null, identifier);
+    user = db.prepare('SELECT * FROM admin_user WHERE id = ?').get(Number(result.lastInsertRowid)) as UserRecord;
+  }
+
+  if (user.status === 'disabled') return { error: 'USER_DISABLED' };
+
+  const token = signToken({ uid: user.id, username: user.username, role: user.role });
+  return { user: toSafeUser(user), token };
+}
+
+/**
+ * 生成外部账号用户名：前缀 + 标识片段，重名时追加序号
+ * @param provider 认证提供方
+ * @param identifier 外部身份标识
+ */
+function buildExternalUsername(provider: ExternalProvider, identifier: string): string {
+  const db = getAuthDb();
+  const prefix = { email: 'mail', wechat: 'wx', sso: 'sso', cert: 'cert' }[provider];
+  const raw = identifier.replace(/[^a-zA-Z0-9]/g, '').slice(0, 12) || Date.now().toString(36);
+  let name = `${prefix}_${raw}`;
+  let index = 2;
+  while (db.prepare('SELECT id FROM admin_user WHERE username = ?').get(name)) {
+    name = `${prefix}_${raw}_${index++}`;
+  }
+  return name;
 }
 
 // ========================== 用户管理（管理员专属） ==========================

@@ -134,5 +134,43 @@ export const config = {
   jwt: {
     secret: readText('JWT_SECRET', 'scenic-ai-dev-secret-change-in-production-2026'),
     expiresIn: readText('JWT_EXPIRES_IN', '7d')
+  },
+
+  // 统一身份认证（成员C）：默认全部为 mock 演示模式，无需外部资质
+  unified: {
+    email: {
+      /** mock：不真正发信，验证码直接返回前端演示；smtp：接入真实邮件服务 */
+      provider: readText('EMAIL_PROVIDER', 'mock') as 'mock' | 'smtp',
+      smtpHost: readText('SMTP_HOST', ''),
+      smtpPort: readInt('SMTP_PORT', 465),
+      smtpUser: readText('SMTP_USER', ''),
+      smtpPass: readText('SMTP_PASS', ''),
+      from: readText('SMTP_FROM', 'noreply@scenic-ai.local'),
+      /** 验证码有效期 / 重发冷却（秒） */
+      codeTtlSec: readInt('EMAIL_CODE_TTL', 300),
+      cooldownSec: readInt('EMAIL_CODE_COOLDOWN', 60),
+      /** mock 模式下是否把验证码回传给前端（仅演示环境开启） */
+      exposeCode: readText('EMAIL_EXPOSE_CODE', 'true') === 'true'
+    },
+    wechat: {
+      /** 微信开放平台网站应用（扫码登录）资质 */
+      appId: readText('WECHAT_APP_ID', ''),
+      appSecret: readText('WECHAT_APP_SECRET', ''),
+      /** mock：二维码为本地模拟，无需真实 AppID */
+      mock: readText('WECHAT_MODE', 'mock') !== 'real',
+      /** 二维码有效期（秒） */
+      qrTtlSec: readInt('WECHAT_QR_TTL', 120)
+    },
+    sso: {
+      /** mock：本地点一下即返回票据；real：对接学校统一认证平台 */
+      mode: readText('SSO_MODE', 'mock') as 'mock' | 'real',
+      endpoint: readText('SSO_ENDPOINT', ''),
+      clientId: readText('SSO_CLIENT_ID', '')
+    },
+    cert: {
+      /** mock：仅校验证书文件可读 + 计算指纹；ca：对接真实 CA 证书验签 */
+      mode: readText('CERT_MODE', 'mock') as 'mock' | 'ca',
+      caCertPath: readText('CA_CERT_PATH', '')
+    }
   }
 } as const;

@@ -13,7 +13,9 @@ export type LoginResult =
   | 'success'
   | 'fail_wrong_password'
   | 'fail_user_not_found'
-  | 'fail_user_disabled';
+  | 'fail_user_disabled'
+  /** 第三方 / 统一认证失败（验证码错误、票据无效、证书无效、账号禁用等） */
+  | 'fail_external';
 
 /** 登录日志入参 */
 export interface LoginLogInput {

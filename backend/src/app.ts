@@ -18,6 +18,7 @@ import analyticsRouter from './analytics/routes.js';
 import asrTtsRouter from './routes/asrTts.js';
 import kbRouter from './routes/kb.js';
 import authRouter from './routes/auth.js';
+import unifiedAuthRouter from './routes/unifiedAuth.js';
 import productRouter from './routes/product.js';
 import contentRouter from './routes/content.js';
 import adminContentRouter from './routes/adminContent.js';
@@ -57,6 +58,8 @@ app.use('/api/v1/analytics', analyticsRouter);
 app.use('/api/v1/asr-tts', asrTtsRouter);
 app.use('/api/v1/kb', kbRouter);
 app.use('/api/v1/auth', authRouter);
+// 统一身份认证（邮件验证码 / 微信扫码 / 统一认证平台 / 数字证书），与账号密码通道并行
+app.use('/api/v1/auth', unifiedAuthRouter);
 app.use('/api/v1/products', productRouter);
 app.use('/api/v1/content', contentRouter);
 app.use('/api/v1/admin/content', adminContentRouter);
