@@ -8,9 +8,9 @@
  *              数字人播报并同步口型。文字提问与语音提问共用同一条链路。
  *              数字人优先使用 Live2D 模型渲染口型，模型不可用时降级为 Canvas 数字人。
  */
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import ConversationList from '../components/interaction/ConversationList.vue'
-import DigitalHumanAvatar from '../components/interaction/DigitalHumanAvatar.vue'
+import Avatar from '../components/common/Avatar.vue'
 import Live2dAvatar from '../components/interaction/Live2dAvatar.vue'
 import TextInputBar from '../components/interaction/TextInputBar.vue'
 import VoiceInputButton from '../components/interaction/VoiceInputButton.vue'
@@ -19,6 +19,7 @@ import { useAudioCapture } from '../composables/useAudioCapture'
 import { useTtsStream } from '../composables/useTtsStream'
 import type { ChatRole, ChatTurn } from '../types/interaction'
 import { buildGuideReply } from '../utils/guideReply'
+import { trackAutoBind, trackClick } from '../utils/track'
 
 /** 常用问题快捷选项，方便无麦克风时演示 */
 const PRESET_QUESTIONS = ['西湖有哪些必看景点？', '雷峰塔有什么历史故事？', '推荐一条两小时的游览路线']
@@ -178,7 +179,7 @@ async function handleSpeechEnd(wav: Blob): Promise<void> {
         :is-speaking="isStreaming"
         @unavailable="handleLive2dUnavailable"
       />
-      <DigitalHumanAvatar v-else :mouth-open="mouthOpen" :is-speaking="isStreaming" />
+      <Avatar v-else mode="lip-sync" :mouth-open="mouthOpen" :is-speaking="isStreaming" />
       <h2 class="interaction__name">数字人导览员 · 小导</h2>
       <p class="interaction__status">{{ avatarStatus }}</p>
       <p class="interaction__engine">渲染方式：{{ avatarRenderer }}</p>

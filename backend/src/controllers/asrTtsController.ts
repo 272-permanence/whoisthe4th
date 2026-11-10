@@ -11,6 +11,7 @@ import { config } from '../config.js';
 import { ErrorCodeEnum } from '../constants/errorCodes.js';
 import { transcribeAudio } from '../services/asrService.js';
 import { createTtsStream, type TtsStream } from '../services/ttsService.js';
+import { convertAudioTo16kWav } from '../services/audioConverter.js';
 import { initSseStream, sendSseEvent, startSseHeartbeat, SseEventEnum } from '../common/sse.js';
 import { createLogger } from '../common/logger.js';
 import { insertAudioLog, insertAsrResult } from '../services/db.js';
@@ -82,10 +83,17 @@ export async function handleTranscribe(req: Request, res: Response): Promise<voi
   }
 
   try {
+    // 手机端 MediaRecorder 可能生成 webm/ogg → 统一转成 Whisper 原生能吃的 WAV 16kHz mono
+    // ffmpeg 不可用时自动降级（原样返回），不阻断主流程
+    const converted = await convertAudioTo16kWav(file.buffer, file.mimetype, originalName);
+    if (converted.converted) {
+      logger.INFO(`音频已转换: ${file.mimetype}/${originalName} → ${converted.mimetype}/${converted.filename}`);
+    }
+
     const result = await transcribeAudio({
-      buffer: file.buffer,
-      mimetype: file.mimetype,
-      filename: originalName
+      buffer: converted.buffer,
+      mimetype: converted.mimetype,
+      filename: converted.filename
     });
     // 成功：写 asr_result（status=success）
     try {
