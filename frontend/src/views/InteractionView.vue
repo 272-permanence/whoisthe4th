@@ -19,6 +19,7 @@ import { useAudioCapture } from '../composables/useAudioCapture'
 import { useTtsStream } from '../composables/useTtsStream'
 import type { ChatRole, ChatTurn } from '../types/interaction'
 import { buildGuideReply } from '../utils/guideReply'
+import { trackAutoBind, trackClick } from '../utils/track'
 
 /** 常用问题快捷选项，方便无麦克风时演示 */
 const PRESET_QUESTIONS = ['西湖有哪些必看景点？', '雷峰塔有什么历史故事？', '推荐一条两小时的游览路线']
