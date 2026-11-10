@@ -1,3 +1,8 @@
+<!--
+  @file 登录 / 注册页
+  @author 第八组（成员C）
+  @date 2026-11-03
+-->
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
@@ -6,195 +11,198 @@ import { loginApi, registerApi } from '../api/auth';
 const router = useRouter();
 const route = useRoute();
 
-const mode = ref<'login' | 'register'>('login');
-const username = ref('');
-const password = ref('');
-const nickname = ref('');
+const isRegister = ref(false);
+const form = ref({
+  username: '',
+  password: '',
+  nickname: '',
+  role: 'user' as 'admin' | 'user'
+});
 const loading = ref(false);
 const errorMsg = ref('');
 
 async function handleSubmit() {
   errorMsg.value = '';
-  if (!username.value.trim() || !password.value.trim()) {
+  if (!form.value.username || !form.value.password) {
     errorMsg.value = '请填写用户名和密码';
-    return;
-  }
-  if (password.value.length < 6) {
-    errorMsg.value = '密码至少 6 位';
     return;
   }
   loading.value = true;
   try {
-    const loginResult = mode.value === 'login'
-      ? await loginApi(username.value.trim(), password.value)
-      : (await registerApi(username.value.trim(), password.value, nickname.value.trim() || undefined),
-         await loginApi(username.value.trim(), password.value));
-    // 按 role 跳转：admin 进后台，user 进用户端
-    const userRole = loginResult.user.role;
-    const redirect = route.query.redirect as string | undefined;
-    if (redirect) {
-      router.replace(redirect);
-    } else if (userRole === 'admin') {
-      router.replace('/admin');
-    } else {
-      router.replace('/');
-    }
-  } catch (err: unknown) {
-    errorMsg.value = err instanceof Error ? err.message : '操作失败';
+    const result = isRegister.value
+      ? await registerApi({ ...form.value })
+      : await loginApi(form.value.username, form.value.password);
+
+    // 保存 token + 用户信息到 localStorage
+    localStorage.setItem('auth_token', result.token);
+    localStorage.setItem('auth_user', JSON.stringify(result.user));
+
+    // 跳转到 redirect 地址或首页
+    const redirect = (route.query.redirect as string) ?? '/';
+    router.replace(redirect);
+  } catch (err) {
+    errorMsg.value = (err as Error).message;
   } finally {
     loading.value = false;
   }
 }
 
-function switchMode() {
-  mode.value = mode.value === 'login' ? 'register' : 'login';
+function toggleMode() {
+  isRegister.value = !isRegister.value;
   errorMsg.value = '';
 }
 </script>
 
 <template>
   <div class="login-page">
-    <div class="login-wrap">
-      <div class="brand">
-        <div class="brand-name">西湖文化 AI 导览</div>
-        <div class="brand-sub">LLM + RAG · 智能导览系统</div>
-      </div>
+    <div class="login-card">
+      <h2>{{ isRegister ? '注册新账户' : '后台登录' }}</h2>
 
-      <div class="login-card">
-        <h2 class="login-title">{{ mode === 'login' ? '登录' : '注册' }}</h2>
+      <form @submit.prevent="handleSubmit" class="login-form">
+        <label>
+          用户名
+          <input v-model="form.username" type="text" placeholder="3-32 字符" maxlength="32" />
+        </label>
 
-        <form @submit.prevent="handleSubmit" class="login-form">
-          <div class="form-row">
-            <label class="label" for="login-username">用户名</label>
-            <input id="login-username" v-model="username" class="input" type="text" placeholder="admin" autocomplete="username" />
-          </div>
+        <label>
+          密码
+          <input v-model="form.password" type="password" placeholder="至少 6 位" />
+        </label>
 
-          <div class="form-row">
-            <label class="label" for="login-password">密码</label>
-            <input id="login-password" v-model="password" class="input" type="password" placeholder="至少 6 位" autocomplete="current-password" />
-          </div>
+        <label v-if="isRegister">
+          昵称（可选）
+          <input v-model="form.nickname" type="text" placeholder="显示名称" />
+        </label>
 
-          <div class="form-row" v-if="mode === 'register'">
-            <label class="label" for="login-nickname">昵称（可选）</label>
-            <input id="login-nickname" v-model="nickname" class="input" type="text" placeholder="给自己起个昵称" />
-          </div>
+        <label v-if="isRegister" class="role-select">
+          角色
+          <select v-model="form.role">
+            <option value="user">普通用户</option>
+            <option value="admin">管理员</option>
+          </select>
+        </label>
 
-          <p v-if="errorMsg" class="error-bar form-error">{{ errorMsg }}</p>
+        <p v-if="errorMsg" class="error">{{ errorMsg }}</p>
 
-          <button type="submit" :disabled="loading" class="btn btn-primary submit-btn">
-            {{ loading ? '处理中...' : (mode === 'login' ? '登录' : '注册并登录') }}
-          </button>
-        </form>
-
-        <button type="button" class="switch-btn" @click="switchMode">
-          {{ mode === 'login' ? '没有账号？去注册' : '已有账号？去登录' }}
+        <button type="submit" :disabled="loading">
+          {{ loading ? '处理中...' : (isRegister ? '注册' : '登录') }}
         </button>
+      </form>
 
-        <p v-if="mode === 'login'" class="hint">默认管理员：<code>admin / admin123</code></p>
+      <p class="toggle-link" @click="toggleMode">
+        {{ isRegister ? '已有账户？去登录' : '没有账户？去注册' }}
+      </p>
+
+      <div class="default-hint" v-if="!isRegister">
+        默认管理员：<code>admin / admin123</code>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-/* 页面根节点自行覆盖脚手架深色底，不动全局 style.css */
 .login-page {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-4);
-  background:
-    radial-gradient(600px 320px at 50% -10%, var(--color-primary-soft), transparent 70%),
-    var(--color-bg);
-  color: var(--color-text);
-  font-family: var(--font-sans);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
-.login-wrap {
-  width: min(400px, 100%);
-}
-
-/* 品牌区：宋体标题，青绿记忆点 */
-.brand {
-  text-align: center;
-  margin-bottom: var(--space-6);
-}
-.brand-name {
-  font-family: var(--font-serif);
-  font-size: var(--text-display);
-  font-weight: 600;
-  color: var(--color-primary);
-  letter-spacing: 0.05em;
-}
-.brand-sub {
-  margin-top: var(--space-1);
-  font-size: var(--text-meta);
-  color: var(--color-text-2);
-}
-
-/* 登录卡片：浮层面板，允许 shadow-lg */
 .login-card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
-  padding: var(--space-8);
+  background: #fff;
+  padding: 40px 36px;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  width: 360px;
 }
 
-.login-title {
-  margin: 0 0 var(--space-6);
-  font-family: var(--font-serif);
-  font-size: var(--text-title);
-  font-weight: 600;
-  color: var(--color-text);
+.login-card h2 {
+  margin: 0 0 24px;
+  text-align: center;
+  color: #333;
 }
 
-.login-form .form-row {
-  margin-bottom: var(--space-4);
+.login-form label {
+  display: block;
+  margin-bottom: 14px;
+  font-size: 13px;
+  color: #555;
 }
 
-.form-error {
-  margin: 0 0 var(--space-4);
-}
-
-.submit-btn {
-  width: 100%;
-  height: 40px;
-  font-size: var(--text-body);
-}
-
-.switch-btn {
+.login-form input,
+.login-form select {
   display: block;
   width: 100%;
-  margin-top: var(--space-4);
-  background: none;
-  border: none;
-  font-size: var(--text-caption);
-  color: var(--color-primary);
-  cursor: pointer;
-  font-family: var(--font-sans);
+  box-sizing: border-box;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
 }
-.switch-btn:hover {
+
+.login-form input:focus,
+.login-form select:focus {
+  border-color: #667eea;
+}
+
+.role-select select {
+  background: #fff;
+}
+
+.error {
+  color: #e74c3c;
+  font-size: 13px;
+  margin: 10px 0;
+}
+
+.login-form button {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 15px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  margin-top: 8px;
+}
+
+.login-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.toggle-link {
+  text-align: center;
+  margin-top: 16px;
+  font-size: 13px;
+  color: #667eea;
+  cursor: pointer;
+}
+
+.toggle-link:hover {
   text-decoration: underline;
 }
 
-.hint {
+.default-hint {
+  margin-top: 18px;
+  padding: 10px;
+  background: #f0f4ff;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #555;
   text-align: center;
-  font-size: var(--text-meta);
-  color: var(--color-text-2);
-  margin: var(--space-4) 0 0;
-}
-.hint code {
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  padding: 1px var(--space-2);
-  border-radius: var(--space-1);
 }
 
-@media (max-width: 640px) {
-  .login-card {
-    padding: var(--space-6);
-  }
+.default-hint code {
+  background: #fff;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 12px;
 }
 </style>
