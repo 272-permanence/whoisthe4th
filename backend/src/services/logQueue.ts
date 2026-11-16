@@ -131,6 +131,16 @@ export async function startLogQueueConsumer(): Promise<void> {
       if (!String(error).includes('BUSYGROUP')) throw error;
     }
 
+    // 关键防护：如果 stream 已存在且有消息后才创建 group，Redis 会把
+    // last-delivered-id 自动设成 max-stream-id → 后续 XREADGROUP ">" 永远返回 null。
+    // 这里强制重置为 0-0，确保 ">" 能读到所有未投递的新消息。
+    try {
+      await client.xgroup('SETID', config.redis.logStream, config.redis.logGroup, '0');
+    } catch (e) {
+      // SETID 失败不是致命错误，最多这次重启漏掉一些残留消息
+      log.WARN(`XGROUP SETID 跳过: ${String(e)}`);
+    }
+
     consumerClient = client;
     running = true;
     void consumeLoop();
