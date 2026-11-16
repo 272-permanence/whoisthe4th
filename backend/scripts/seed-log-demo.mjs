@@ -76,7 +76,7 @@ async function main() {
   const ghost = await call('POST', '/api/v1/auth/login', { username: 'ghost_user', password: 'x' });
   loginResults.push(`unknown-user(${ghost.status})`);
   console.log(`\n[1·login_log] ${loginResults.join(' ')}`);
-  console.log(`   ↳ 登录日志已落 login_log 表（字段：masked_username / fail_reason）`);
+  console.log(`   ↳ 登录日志已落 login_log 表（字段：username（已脱敏）/ login_result / fail_reason）`);
   await wait('登录 5 条已灌入，现在造操作日志');
 
   // 2. 后端中间件自动落 operation_log

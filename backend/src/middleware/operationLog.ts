@@ -46,7 +46,8 @@ export const operationLogMiddleware = router.use((req, res, next) => {
     const authUser = (req as Request & { user?: { uid?: number; id?: number } }).user;
     const userId = authUser?.uid ?? authUser?.id ?? null;
 
-    const apiPath = req.path;
+    // finish 阶段 req.path 已被 Express 路由改写（常变成 '/'），必须用 originalUrl 还原真实路径
+    const apiPath = (req.originalUrl ?? req.path).split('?')[0];
     const httpMethod = req.method;
     const responseCode = res.statusCode;
     const ip = req.ip ?? req.socket.remoteAddress ?? null;
