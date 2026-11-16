@@ -315,6 +315,40 @@ table.compare tr:hover td { background: rgba(88,166,255,.04); }
   <div class="notes">进入技术细节部分</div>
 </section>
 
+<!-- ============ 8.5 日志框架对比 + Pino 原理（对应题目要求） ============ -->
+<section class="slide deco-grid" data-deck-label="日志框架对比与 Pino 原理">
+  <div class="eyebrow">PART 1 · 选型与原理</div>
+  <h2>五个日志框架怎么选，为什么最后是 Pino</h2>
+  <table class="compare" style="margin-top:24px;">
+    <thead>
+      <tr><th>框架</th><th>结构化输出</th><th>写入方式</th><th>吞吐</th><th>结论</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><b>Winston</b></td><td class="pass">✅ 需配置</td><td class="warn">⚠️ 默认同步</td><td>~20K/s</td><td>生态最全，吞吐偏低</td></tr>
+      <tr><td><b>Bunyan</b></td><td class="pass">✅ 原生 JSON</td><td class="warn">⚠️ 部分同步</td><td>~50K/s</td><td>已停止维护</td></tr>
+      <tr><td><b>Pino</b></td><td class="pass">✅ 原生 JSON</td><td class="pass">✅ libuv 异步</td><td class="pass">~300K/s</td><td class="pass">✅ 本方案</td></tr>
+      <tr><td><b>log4js</b></td><td class="warn">⚠️ 需配置</td><td class="pass">✅ 异步</td><td>~15K/s</td><td>Java 风格，配置重</td></tr>
+      <tr><td><b>Morgan</b></td><td class="fail">❌ 纯文本</td><td class="fail">❌ 同步</td><td>~10K/s</td><td>只能记 HTTP，无法检索</td></tr>
+    </tbody>
+  </table>
+  <div class="grid-3" style="margin-top:20px;">
+    <div class="card" style="border-color:var(--accent);">
+      <div class="card-title" style="color:var(--accent);">① 序列化在 C++ 层</div>
+      <div class="card-desc">底层 sonic-boom 直接拼 JSON 字符串，不构造 JS 对象、不走 JSON.stringify。这是它比 Winston 快一个数量级的主因。</div>
+    </div>
+    <div class="card" style="border-color:var(--green);">
+      <div class="card-title" style="color:var(--green);">② 写入走 libuv 线程池</div>
+      <div class="card-desc">落盘交给 libuv 异步队列，主线程只往缓冲区塞数据。业务接口不会等磁盘 IO，这是我们选它的直接原因。</div>
+    </div>
+    <div class="card" style="border-color:var(--purple);">
+      <div class="card-title" style="color:var(--purple);">③ child() 绑定上下文</div>
+      <div class="card-desc">每个请求派生一个 child logger，把 traceId / userId 绑进去，之后每行自动携带，不用手动传参。</div>
+    </div>
+  </div>
+  <div class="meta" style="margin-top:16px;">开发态 pino-pretty 彩色输出 → 生产态 app.log 写 JSON（sync: false）→ 两极都挂还有文件兜底</div>
+  <div class="notes">对应题目三条要求：列举成熟框架、对比优缺点、选一个讲原理。这页 70 秒讲完，不展开细节</div>
+</section>
+
 <!-- ============ 9. TraceId 全链路 ============ -->
 <section class="slide deco-grid" data-deck-label="TraceId 全链路">
   <div class="eyebrow">PART 2 · TRACE ID</div>
