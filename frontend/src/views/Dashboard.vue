@@ -5,10 +5,22 @@
  * @date 2026-10-15
  * @description 实时展示服务人次、热门问答、情感分布、问答趋势
  */
-import { ref, onMounted, onBeforeUnmount, shallowRef } from 'vue';
+import { ref, onMounted, onBeforeUnmount, shallowRef, nextTick } from 'vue';
+import { useRouter } from 'vue-router';
 import * as echarts from 'echarts';
 import { getStats, connectStatsStream, type AnalyticsStats } from '../api/analytics';
 import { apiFetch } from '../common/apiClient';
+
+const router = useRouter();
+
+/** 返回上一页；直接打开本页（无历史记录）时兜底回首页 */
+function goBack(): void {
+  if (window.history.length > 1) {
+    router.back();
+  } else {
+    router.push('/home');
+  }
+}
 
 // ==================== 日志审计相关 ====================
 const activeTab = ref<'stats' | 'audit'>('stats');
@@ -95,13 +107,20 @@ async function queryTrace() {
 }
 
 /** 切换到日志审计 tab 时加载数据 */
-function switchToAudit() {
+async function switchToAudit() {
   activeTab.value = 'audit';
-  if (!hotPoisChart.value) {
-    hotPoisChart.value = echarts.init(document.getElementById('hot-pois-chart')!);
+  // 必须等 DOM 渲染完再 init：v-if 的容器在 activeTab 变更前不存在，
+  // 直接 getElementById 会拿到 null，echarts.init(null) 抛错会导致后续请求全部中断
+  await nextTick();
+  const el = document.getElementById('hot-pois-chart');
+  if (el) {
+    // 切走再切回时容器已被 v-if 销毁重建，旧实例绑定的是失效 DOM，必须重新 init
+    if (!hotPoisChart.value || hotPoisChart.value.getDom() !== el) {
+      hotPoisChart.value?.dispose();
+      hotPoisChart.value = echarts.init(el);
+    }
+    await Promise.all([loadHotPois(), loadAbnormalLogins()]);
   }
-  loadHotPois();
-  loadAbnormalLogins();
 }
 
 const totalVisits = ref(0);
@@ -234,7 +253,13 @@ function resizeCharts() {
   <div class="dashboard">
     <!-- 顶部标题栏 -->
     <header class="dashboard-header">
-      <h1>景区导览 AI 数字人 · 数据运营大屏</h1>
+      <div class="header-left">
+        <button class="back-btn" aria-label="返回上一页" @click="goBack">
+          <span class="back-arrow">‹</span>
+          <span class="back-text">返回</span>
+        </button>
+        <h1>景区导览 AI 数字人 · 数据运营大屏</h1>
+      </div>
       <span class="update-time">更新时间：{{ updatedAt }}</span>
     </header>
 
@@ -361,6 +386,39 @@ function resizeCharts() {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* 返回按钮：与大屏整体一致的深色玻璃拟态 */
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 14px 6px 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  color: #e0e0e0;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.back-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.back-arrow {
+  font-size: 18px;
+  line-height: 1;
+  transform: translateY(-1px);
 }
 
 .dashboard-header h1 {
@@ -592,39 +650,61 @@ function resizeCharts() {
 /* 移动端适配：窄屏下单列布局，卡片两列排布 */
 @media (max-width: 768px) {
   .dashboard {
-    padding: 16px 12px;
+    padding: 12px 10px 20px;
   }
 
   .dashboard-header {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-    margin-bottom: 16px;
+    align-items: stretch;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+
+  .header-left {
+    gap: 8px;
   }
 
   .dashboard-header h1 {
-    font-size: 18px;
-    letter-spacing: 1px;
+    font-size: 15px;
+    letter-spacing: 0;
+    line-height: 1.3;
+  }
+
+  .back-btn {
+    flex-shrink: 0;
+    padding: 5px 11px 5px 8px;
+    font-size: 13px;
+  }
+
+  .update-time {
+    font-size: 12px;
+    padding-left: 2px;
   }
 
   .stat-cards {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    margin-bottom: 16px;
+    gap: 10px;
+    margin-bottom: 14px;
   }
 
   .card {
-    padding: 16px 8px;
+    padding: 14px 8px;
+    border-radius: 10px;
+  }
+
+  .card-label {
+    font-size: 13px;
+    margin-bottom: 8px;
   }
 
   .card-value {
-    font-size: 28px;
+    font-size: 26px;
   }
 
   .charts {
     grid-template-columns: 1fr;
-    gap: 12px;
+    gap: 10px;
   }
 
   .full-width {
@@ -632,22 +712,38 @@ function resizeCharts() {
   }
 
   .chart {
-    height: 260px;
+    height: 240px;
+  }
+
+  .tab-nav {
+    gap: 8px;
+    margin-bottom: 14px;
   }
 
   .tab-btn {
     flex: 1;
     padding: 8px 0;
     text-align: center;
+    font-size: 14px;
+  }
+
+  /* 审计表格窄屏下横向滚动，避免列被挤碎 */
+  .chart-box {
+    overflow-x: auto;
   }
 
   .audit-table {
+    min-width: 460px;
     font-size: 12px;
   }
 
   .audit-table th,
   .audit-table td {
     padding: 8px 6px;
+  }
+
+  .trace-query {
+    flex-wrap: nowrap;
   }
 }
 </style>
