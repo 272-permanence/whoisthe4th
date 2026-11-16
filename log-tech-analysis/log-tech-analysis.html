@@ -515,34 +515,148 @@ GET  /api/v1/analytics/recommend/related-pois  <span class="c">// 相关景点�
   <div class="notes">进入 Demo 环节</div>
 </section>
 
-<!-- ============ 15. Demo ============ -->
-<section class="slide deco-grid" data-deck-label="现场 Demo">
-  <div class="eyebrow">LIVE DEMO</div>
-  <h2>后端真实日志输出</h2>
-  <div style="margin-top:32px;">
-    <div class="terminal-header"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:12px;color:var(--text-dim);font-family:var(--mono);">npm run dev · backend</span></div>
-    <div class="terminal-body" style="font-size:16px;max-height:480px;overflow-y:auto;">
-<span class="t-ts">◇ injected env from .env</span><br>
-<span class="t-info">INFO MySQL master 连接池已创建 127.0.0.1:3306/scenic_ai</span><br>
-<span class="t-info">INFO Redis 已连接 redis://127.0.0.1:6379</span><br>
-<span class="t-info">INFO 日志消费者已启动 stream=scenic:log:stream group=log-writer</span><br>
-<span class="t-info">INFO 后端服务已启动: http://localhost:8000</span><br><br>
-<span class="t-warn">WARN  登录失败 <span class="t-trace">[trace=bec5e74b-02b2-427a-b265-01c621a15455]</span></span><br>
-<span class="t-ts">      maskedUsername: <span class="t-info">"ad***in"</span></span><br>
-<span class="t-ts">      ip: <span class="t-ip">"::ffff:127.0.0.1"</span></span><br>
-<span class="t-ts">      failReason: <span class="t-err">"BAD_CREDENTIALS"</span></span><br>
-<span class="t-err">ERROR 日志落库失败 id=1794302793551-0 <span class="t-trace">[trace=bec5e74b...]</span></span><br>
-<span class="t-ts">      ↳ MySQL 3306 root 密码不对，但 Redis Stream 消费者拉到了消息</span><br>
-<span class="t-ts">      ↳ 消息保留在 pending 队列，不丢失！</span><br><br>
-<span class="t-warn">WARN  登录拦截：参数缺失 <span class="t-trace">[trace=31958160-f304-4c8f-83e8-c44420ceebce]</span></span><br>
-<span class="t-ts">      maskedUsername: <span class="t-info">"ad***in"</span></span><br><br>
-<span class="t-err">ERROR POI 列表异常: Access denied for user 'root'@'localhost'</span><br>
-<span class="t-err">ERROR 日志落库失败 id=1794302793603-0</span><br>
-<span class="t-info">INFO MySQL slave 连接池已创建 127.0.0.1:3306/scenic_ai</span>
+<!-- ============ 15–18. 四张动态 Demo 场景页 ============ -->
+
+<section class="slide deco-grid" data-deck-label="Demo·1 登录日志 + 脱敏">
+  <div class="eyebrow">DEMO · 01</div>
+  <h2>登录 5 次 → 立刻看到 login_log 表写入，且用户名已脱敏</h2>
+  <div class="grid-2" style="margin-top:28px;gap:28px;">
+    <div>
+      <div class="terminal-header"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:12px;color:var(--text-dim);font-family:var(--mono);">Terminal</span></div>
+      <div class="terminal-body" style="font-size:15px;min-height:220px;">
+<span class="t-ts"># 1) 先清空旧数据</span><br>
+<span class="t-cmd">$ cd backend</span><br>
+<span class="t-cmd">$ node scripts/reset-logs.mjs</span><br>
+<span class="t-info">mysql TRUNCATE login_log ✔</span><br>
+<span class="t-info">redis DEL scenic:log:stream ✔</span><br><br>
+<span class="t-ts"># 2) 逐步造数，跑第 1 步登录</span><br>
+<span class="t-cmd">$ node scripts/seed-log-demo.mjs --step</span><br>
+<span class="t-info">[0·health] 200 ... ✔</span><br>
+<span class="t-warn">[1·login_log] success(200) fail(401) fail(401) fail(401) unknown-user(401)</span><br><br>
+<span class="t-ts"># 3) 查数据库</span><br>
+<span class="t-cmd">mysql> SELECT masked_username, login_result FROM login_log;</span><br>
+<span class="t-info">ad***in  | SUCCESS  / BAD_CREDENTIALS ×3</span><br>
+<span class="t-info">gh***er | BAD_CREDENTIALS</span>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="border-color:var(--accent);">
+        <div class="card-title" style="color:var(--accent);">🎯 讲解点</div>
+        <div class="card-desc">
+          <b>mask.ts 的 maskSingle 把中间换成 3 个星号，不可逆。</b><br><br>
+          原始用户名 admin → 存成 ad***in，guest → gh***er。密码字段根本不进 login_log——authService 在写库前就摘了 password 字段。<br><br>
+          跑前必 reset，保证现场看到的"都是我刚造的"。
+        </div>
+      </div>
     </div>
   </div>
-  <div class="meta" style="margin-top:24px;">💡 从真实日志可以看到 <span class="t-info">脱敏生效</span>、<span class="t-info">traceId 全链路</span>、<span class="t-warn">降级策略</span>、<span class="t-err">错误捕获</span> 四大亮点</div>
-  <div class="notes">切换到真实终端演示，这张 slide 是讲解底稿</div>
+  <div class="notes">Demo 第 1 段：reset → seed --step → 查 login_log</div>
+</section>
+
+<section class="slide deco-grid" data-deck-label="Demo·2 后端异常自动落 error_log">
+  <div class="eyebrow">DEMO · 02</div>
+  <h2>手工触发非法 JSON → 全局 errorHandler 自动写 error_log</h2>
+  <div class="grid-2" style="margin-top:28px;gap:28px;">
+    <div>
+      <div class="terminal-header"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:12px;color:var(--text-dim);font-family:var(--mono);">Postman / curl</span></div>
+      <div class="terminal-body" style="font-size:15px;min-height:220px;">
+<span class="t-ts"># 发一条非法 JSON，POST /api/v1/auth/login</span><br>
+<span class="t-cmd">POST localhost:8000/api/v1/auth/login</span><br>
+<span class="t-cmd">Body: <span style="color:var(--red);">{ this is not json</span></span><br>
+<span class="t-warn">→ 后端返回 400 + ErrorCodeEnum.INVALID_AUDIO 类型映射</span><br><br>
+<span class="t-ts"># 立刻查 error_log</span><br>
+<span class="t-cmd">mysql> SELECT error_type, LEFT(stack, 60) FROM error_log ORDER BY id DESC LIMIT 1;</span><br>
+<span class="t-info">SyntaxError  | Expected property name or '}' in JSON at position 2</span><br>
+<span class="t-ts">              ↳ at JSON.parse (&lt;anonymous&gt;)</span><br>
+<span class="t-ts">              ↳ at body-parser/lib/types/json.js:96</span>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="border-color:var(--red);">
+        <div class="card-title" style="color:var(--red);">🎯 讲解点</div>
+        <div class="card-desc">
+          <b>全局 errorHandler 只有一处，所有未捕获异常自动进 errorLogger。</b><br><br>
+          app.ts 最后那段 `app.use((error, req, res, _next) => { void logError(error, req); ... })` —— 不挑异常类型，不挑来源，**只要 Express 捕获到的全进 error_log 表**。<br><br>
+          现场可以翻出那条 SQL，给大家看完整的 Node.js stack trace。
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="notes">Demo 第 2 段：手工发非法 JSON → 查 error_log 看 stack trace</div>
+</section>
+
+<section class="slide deco-grid" data-deck-label="Demo·3 全链路 traceId 可视化">
+  <div class="eyebrow">DEMO · 03</div>
+  <h2>同一个 traceId 串起 operation_log + error_log</h2>
+  <div class="grid-2" style="margin-top:28px;gap:28px;">
+    <div>
+      <div class="terminal-header"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:12px;color:var(--text-dim);font-family:var(--mono);">Browser / curl</span></div>
+      <div class="terminal-body" style="font-size:15px;min-height:220px;">
+<span class="t-ts"># 先 seed --step 跑到第 6 步（chain），记下输出的 traceId</span><br>
+<span class="t-info">[6·chain] traceId=demo-chain-1794818701511</span><br><br>
+<span class="t-ts"># 查全链路</span><br>
+<span class="t-cmd">GET localhost:8000/api/v1/logs/trace/</span><br>
+<span class="t-cmd">  demo-chain-1794818701511</span><br>
+<span class="t-ts"># 响应 JSON：</span><br>
+<span class="t-info">{</span><br>
+<span class="t-info">  "operationCount": 1,</span><br>
+<span class="t-info">  "errorCount": 1,</span><br>
+<span class="t-info">  "loginCount": 0,</span><br>
+<span class="t-info">  "timeline": [</span><br>
+<span class="t-info">    { type: "operation", apiPath: "/logs/operation" },</span><br>
+<span class="t-info">    { type: "error",    errorName: "ChainDemoError" }</span><br>
+<span class="t-info">  ]</span><br>
+<span class="t-info">}</span>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="border-color:var(--accent);">
+        <div class="card-title" style="color:var(--accent);">🎯 讲解点</div>
+        <div class="card-desc">
+          <b>traceId 是前端 apiClient 和后端 middleware 共同维护的会话级 ID。</b><br><br>
+          请求进后端 → traceIdMiddleware 分配 / 复用客户端传来的 X-Trace-Id → 写入响应头 → 前端读回来再传下一次。中间件、登录、错误、埋点四条链路都用这一个 id。<br><br>
+          真出事时，把 traceId 丢进去，立刻能还原"这个用户这次操作全程发生了什么"。
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="notes">Demo 第 3 段：用 seed --step 生成 chain traceId，查 trace 接口还原全链路</div>
+</section>
+
+<section class="slide deco-grid" data-deck-label="Demo·4 Redis Stream pending 不丢消息">
+  <div class="eyebrow">DEMO · 04（可选）</div>
+  <h2>Redis Stream pending 机制：落库失败不 ACK，消息留在队列等重试</h2>
+  <div class="grid-2" style="margin-top:28px;gap:28px;">
+    <div>
+      <div class="terminal-header"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:12px;color:var(--text-dim);font-family:var(--mono);">redis-cli</span></div>
+      <div class="terminal-body" style="font-size:15px;min-height:200px;">
+<span class="t-cmd">$ redis-cli XLEN scenic:log:stream</span><br>
+<span class="t-info">(integer) 0</span><br><br>
+<span class="t-cmd">$ redis-cli XINFO CONSUMER scenic:log:stream log-writer node-12345</span><br>
+<span class="t-info">pending: 0</span><br><br>
+<span class="t-ts"># 故意让 MySQL 挂掉（比如 TRUNCATE 后立即停 mysqld）</span><br>
+<span class="t-ts"># 再 seed 一批</span><br>
+<span class="t-cmd">$ node scripts/seed-log-demo.mjs</span><br>
+<span class="t-warn">后端 WARN: MySQL 不可用，但 Redis Stream 生产者 XADD 已入队</span><br><br>
+<span class="t-cmd">$ redis-cli XINFO CONSUMER scenic:log:stream log-writer node-12345</span><br>
+<span class="t-info">pending: 30  ← 消息留在这里，没有被 ACK！</span><br><br>
+<span class="t-ts"># MySQL 恢复后，重启后端或手动 XCLAIM</span><br>
+<span class="t-ts"># pending 会被下一次消费自动 ACK</span>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="border-color:var(--purple);">
+        <div class="card-title" style="color:var(--purple);">🎯 讲解点</div>
+        <div class="card-desc">
+          <b>logQueue.ts 写死的策略：落库失败绝不 XACK。</b><br><br>
+          正常消费完 → MySQL INSERT 成功 → XACK → 消息从队列移除。落库失败 → 不 ACK → 消息留在 pending 列表 → 下次消费循环自动重试。<br><br>
+          这就是"异步不等于丢"。老师问"消息队列可靠吗"——这个 pending 机制就是我们的答案。
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="meta" style="margin-top:16px;">⏱ 时间不够就跳过这张，前三张覆盖已足够</div>
+  <div class="notes">Demo 第 4 段：可选，用 redis-cli 看 XLEN/XINFO CONSUMER</div>
 </section>
 
 <!-- ============ 16. Section: 总结 ============ -->
