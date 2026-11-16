@@ -39,17 +39,25 @@ for (const t of TABLES) {
 }
 await conn.end();
 
-// 2. 清 Redis Stream（可选，没装 redis 也不硬来）
+// 2. 清 Redis Stream（XTRIM 清空消息但保留 Stream key + consumer group，不影响后端消费者）
 try {
   const { default: Redis } = await import('ioredis');
   const r = new Redis({ host: process.env.REDIS_HOST || '127.0.0.1', port: Number(process.env.REDIS_PORT || 6379), connectTimeout: 1000 });
   const len = await r.xlen(STREAM);
   if (len > 0) {
-    await r.del(STREAM);
-    console.log(`  redis DEL ${STREAM} (len=${len}) ✔`);
+    // XTRIM MAXLEN 0：清空所有消息但 Stream key 和 consumer group 还在
+    await r.xtrim(STREAM, 'MAXLEN', '0');
+    console.log(`  redis XTRIM ${STREAM} (清 ${len} 条，Stream 保留) ✔`);
   } else {
     console.log(`  redis ${STREAM} 本来就是空的`);
   }
+  // 强制把 consumer group 的 last-delivered-id 重置为 0
+  // 万一之前有人 XADD 过又 DEL 重建过，确保 > 语义能读到新消息
+  const group = process.env.REDIS_LOG_GROUP || 'log-writer';
+  try {
+    await r.xgroup('SETID', STREAM, group, '0');
+    console.log(`  redis XGROUP SETID ${group} = 0 ✔`);
+  } catch { /* group 不存在也没关系，后端启动时会 CREATE */ }
   await r.quit();
 } catch (e) {
   console.log(`  redis 跳过（未连接）: ${e.message}`);

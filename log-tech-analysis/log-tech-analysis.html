@@ -315,29 +315,7 @@ table.compare tr:hover td { background: rgba(88,166,255,.04); }
   <div class="notes">进入技术细节部分</div>
 </section>
 
-<!-- ============ 9. Logger 选型对比 ============ -->
-<section class="slide deco-grid" data-deck-label="Logger 选型">
-  <div class="eyebrow">PART 1 · LOGGER</div>
-  <h2>日志框架选型：为什么选 Pino？</h2>
-  <table class="compare" style="margin-top:36px;" data-anim="fade-up">
-    <thead>
-      <tr><th>框架</th><th>底层</th><th>JSON 结构化</th><th>异步写入</th><th>性能（ops/s）</th><th>学习成本</th></tr>
-    </thead>
-    <tbody>
-      <tr><td><b>Winston</b></td><td>Node 原生</td><td class="pass">✅ 需配置</td><td class="warn">⚠️ 同步默认</td><td class="warn">~20K</td><td>低</td></tr>
-      <tr><td><b>Bunyan</b></td><td>Node 原生</td><td class="pass">✅ 原生</td><td class="warn">⚠️ 部分同步</td><td class="warn">~50K</td><td>中</td></tr>
-      <tr><td><b>Pino</b></td><td>C++ 底层</td><td class="pass">✅ 原生</td><td class="pass">✅ libuv 异步</td><td class="pass">~300K</td><td>低</td></tr>
-      <tr><td><b>Morgan</b></td><td>Express 中间件</td><td class="fail">❌ 纯文本</td><td class="fail">❌ 同步</td><td>~10K</td><td>极低</td></tr>
-    </tbody>
-  </table>
-  <div class="grid-2" style="margin-top:32px;">
-    <div class="card"><div class="card-title"><span class="emoji">✅</span> Pino 优势</div><div class="card-desc">C++ + libuv 异步、单文件零配置、pino-pretty 开发态、child() 上下文注入、生态成熟（pino-syslog、pino-datadog）</div></div>
-    <div class="card"><div class="card-title"><span class="emoji">⚙️</span> 我们的配置</div><div class="card-desc">开发态 → pino-pretty 彩色控制台；生产态 → JSON 文件 `app.log`，`sync: false` 异步写入；traceId 通过 AsyncLocalStorage 自动注入</div></div>
-  </div>
-  <div class="notes">讲 Pino vs 其他框架，展示性能数据</div>
-</section>
-
-<!-- ============ 10. TraceId 全链路 ============ -->
+<!-- ============ 9. TraceId 全链路 ============ -->
 <section class="slide deco-grid" data-deck-label="TraceId 全链路">
   <div class="eyebrow">PART 2 · TRACE ID</div>
   <h2>全链路追踪：从前端点击到后端落库</h2>
@@ -455,67 +433,14 @@ table.compare tr:hover td { background: rgba(88,166,255,.04); }
   <div class="notes">讲 Redis Stream 设计 + 降级策略 + 为什么不阻塞</div>
 </section>
 
-<!-- ============ 13. 日志查询 & 审计 ============ -->
-<section class="slide deco-grid" data-deck-label="查询与审计">
-  <div class="eyebrow">PART 5 · QUERY & AUDIT</div>
-  <h2>D 实现的查询接口（管理员权限）</h2>
-  <div class="grid-2" style="margin-top:36px;">
-    <div>
-      <h3 style="color:var(--accent-2);margin-bottom:16px;">📋 核心 API</h3>
-      <div class="code-block" style="font-size:17px;">
-<span class="c">// 公开：前端埋点</span>
-POST /api/v1/logs/operation      <span class="c">// trackClick 上报</span>
-POST /api/v1/logs/error          <span class="c">// trackError 上报</span>
-
-<span class="c">// 管理员：分页查询</span>
-GET  /api/v1/logs/operation      <span class="c">// traceId / userId / time 过滤</span>
-GET  /api/v1/logs/error
-GET  /api/v1/logs/login
-
-<span class="c">// 🔥 全链路追踪</span>
-GET  /api/v1/logs/trace/:traceId <span class="c">// 串联三类日志时间线</span>
-
-<span class="c">// 🔒 审计接口</span>
-GET  /api/v1/analytics/audit/login-abnormal    <span class="c">// 1小时≥3次失败</span>
-GET  /api/v1/analytics/audit/sensitive-ops     <span class="c">// 删除景点等敏感操作</span>
-
-<span class="c">// 📊 行为分析 + 推荐铺垫</span>
-GET  /api/v1/analytics/behaviors/hot-pois      <span class="c">// 热门景点 Top10</span>
-GET  /api/v1/analytics/behaviors/active-hours  <span class="c">// 活跃时段分布</span>
-GET  /api/v1/analytics/recommend/related-pois  <span class="c">// 相关景点推荐</span>
-      </div>
-    </div>
-    <div>
-      <h3 style="color:var(--green);margin-bottom:16px;">✅ 全链路 Trace 查询效果</h3>
-      <div class="terminal-body" style="font-size:16px;">
-<span class="t-info">GET /api/v1/logs/trace/bec5e74b-...</span><br><br>
-<span class="t-info">{</span><br>
-<span class="t-ts">  </span>traceId: <span class="s">"bec5e74b-02b2-427a-..."</span>,<br>
-<span class="t-ts">  </span>operationCount: <span class="v">7</span>,<br>
-<span class="t-ts">  </span>errorCount: <span class="v">0</span>,<br>
-<span class="t-ts">  </span>loginCount: <span class="v">1</span>,<br>
-<span class="t-ts">  </span>timeline: [<br>
-<span class="t-ts">    </span>{ <span class="n">17:26:33</span> } <span class="t-ip">login_log</span> <span class="t-warn">fail_bad_credentials</span>,<br>
-<span class="t-ts">    </span>{ <span class="n">17:26:34</span> } <span class="t-ip">operation_log</span> <span class="t-info">GET /api/v1/poi 500</span>,<br>
-<span class="t-ts">    </span>{ <span class="n">17:26:35</span> } <span class="t-ip">operation_log</span> <span class="t-info">GET /api/v1/home 500</span>,<br>
-<span class="t-ts">    </span>{ <span class="n">17:26:36</span> } <span class="t-ip">operation_log</span> <span class="t-info">POST /logs/operation 200</span>,<br>
-<span class="t-ts">    </span>...<br>
-<span class="t-ts">  ]</span><br>
-<span class="t-info">}</span>
-      </div>
-    </div>
-  </div>
-  <div class="notes">讲查询接口 + 全链路 trace 查询怎么串联三类日志</div>
-</section>
-
-<!-- ============ 14. Section: Demo ============ -->
+<!-- ============ 12. Section: Demo ============ -->
 <section class="slide section-divider-slide deco-grid" data-deck-label="章节4：Demo">
   <div class="chapter">CHAPTER 04</div>
   <div class="section-title">现场演示</div>
   <div class="notes">进入 Demo 环节</div>
 </section>
 
-<!-- ============ 15–18. 四张动态 Demo 场景页 ============ -->
+<!-- ============ 13–21. 七张动态 Demo 场景页 ============ -->
 
 <section class="slide deco-grid" data-deck-label="Demo·1 登录日志 + 脱敏">
   <div class="eyebrow">DEMO · 01</div>
@@ -659,7 +584,115 @@ GET  /api/v1/analytics/recommend/related-pois  <span class="c">// 相关景点�
   <div class="notes">Demo 第 4 段：可选，用 redis-cli 看 XLEN/XINFO CONSUMER</div>
 </section>
 
-<!-- ============ 16. Section: 总结 ============ -->
+<!-- ============ 19. Demo·5 中间件零侵入 ============ -->
+<section class="slide deco-grid" data-deck-label="Demo·5 中间件零侵入 operation_log">
+  <div class="eyebrow">DEMO · 05</div>
+  <h2>只调 3 个业务接口 → 中间件自动落 3 条 operation_log，业务代码一行没改</h2>
+  <div class="grid-2" style="margin-top:28px;gap:28px;">
+    <div>
+      <div class="terminal-header"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:12px;color:var(--text-dim);font-family:var(--mono);">Terminal</span></div>
+      <div class="terminal-body" style="font-size:15px;min-height:220px;">
+<span class="t-ts"># seed --step 跑到第 2 步，回车</span><br>
+<span class="t-info">[2·middleware] 后端中间件自动记录：</span><br>
+<span class="t-cmd">   GET /api/v1/home      => 200  trace=8f3a...c21</span><br>
+<span class="t-cmd">   GET /api/v1/poi       => 200  trace=8f3a...c22</span><br>
+<span class="t-cmd">   GET /api/v1/routes    => 200  trace=8f3a...c23</span><br><br>
+<span class="t-ts"># 查 operation_log</span><br>
+<span class="t-cmd">mysql> SELECT api_path, http_method, response_code, duration_ms FROM operation_log ORDER BY id DESC LIMIT 3;</span><br>
+<span class="t-info">/api/v1/routes   | GET | 200 | 12</span><br>
+<span class="t-info">/api/v1/poi     | GET | 200 | 8</span><br>
+<span class="t-info">/api/v1/home     | GET | 200 | 5</span>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="border-color:var(--green);">
+        <div class="card-title" style="color:var(--green);">🎯 讲解点</div>
+        <div class="card-desc">
+          <b>middleware/logMiddleware.ts 挂在 app.use() 最前面，所有请求自动走一遍。</b><br><br>
+          业务 controller 里写 `router.get('/poi', ...)` 完全不需要关心日志——请求进来、响应出去，中间件自动算 duration_ms、摘 request_params、写 operation_log。<br><br>
+          这就是"横切关注点"——日志不是业务逻辑，不该散落在每个 controller 里。
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="notes">Demo 第 5 段：中间件零侵入，业务代码无感知</div>
+</section>
+
+<!-- ============ 20. Demo·6 前端埋点 ============ -->
+<section class="slide deco-grid" data-deck-label="Demo·6 前端埋点批量入库">
+  <div class="eyebrow">DEMO · 06</div>
+  <h2>前端 track.ts 自动 POST → 16 条点击埋点秒级入 operation_log</h2>
+  <div class="grid-2" style="margin-top:28px;gap:28px;">
+    <div>
+      <div class="terminal-header"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:12px;color:var(--text-dim);font-family:var(--mono);">Terminal</span></div>
+      <div class="terminal-body" style="font-size:15px;min-height:220px;">
+<span class="t-ts"># seed --step 跑到第 3 步</span><br>
+<span class="t-info">[3·track] 前端点击埋点 16/16 条</span><br>
+<span class="t-cmd">   resourceType=page/ai_digital_human/poi/route/lost_found</span><br>
+<span class="t-cmd">   action=view/voice_chat/detail/navigate/search</span><br><br>
+<span class="t-ts"># 去前端看 track.ts 源码，关键就一行：</span><br>
+<span class="t-cmd">fetch('/api/v1/logs/operation', { method:'POST',</span><br>
+<span class="t-cmd">  headers:{ 'X-Trace-Id': getTraceId() },  ← 前端也带 traceId!</span><br>
+<span class="t-cmd">  body: JSON.stringify({ resourceId, action, pagePath, ... }) })</span><br><br>
+<span class="t-ts"># 查 operation_log 里 source='track' 的</span><br>
+<span class="t-info">mysql> SELECT resource_type, action, page_path FROM operation_log WHERE resource_type='poi' LIMIT 3;</span><br>
+<span class="t-info">poi | detail   | /pois</span><br>
+<span class="t-info">poi | view     | /pois</span><br>
+<span class="t-info">poi | view     | /pois</span>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="border-color:var(--yellow);">
+        <div class="card-title" style="color:var(--yellow);">🎯 讲解点</div>
+        <div class="card-desc">
+          <b>前端 track.ts 已经跟上 X-Trace-Id 请求头了。</b><br><br>
+          之前前端埋点是"孤立"的，POST 日志时不带 traceId → 后端落库时这一行的 traceId 是新生成的 UUID，和用户本次会话的链路断开了。改了之后，前端埋点 ↔ 后端接口 ↔ 错误日志，三条线用同一个 traceId 串到底。<br><br>
+          这就是为什么 seed 步骤 3 的 16 条埋点和步骤 2 的 3 条中间件日志能在 trace 查询里拼在一起。
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="notes">Demo 第 6 段：前端埋点批量入库 + X-Trace-Id 打通前后端</div>
+</section>
+
+<!-- ============ 21. Demo·7 汇总查询 ============ -->
+<section class="slide deco-grid" data-deck-label="Demo·7 一张图看完三表汇总">
+  <div class="eyebrow">DEMO · 07</div>
+  <h2>reset → seed → 三条查询接口 → 三表 total 全部实时反映</h2>
+  <div class="grid-2" style="margin-top:28px;gap:28px;">
+    <div>
+      <div class="terminal-header"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:12px;color:var(--text-dim);font-family:var(--mono);">Terminal</span></div>
+      <div class="terminal-body" style="font-size:15px;min-height:220px;">
+<span class="t-ts"># 完整跑完 seed（不 step），等 2 秒 Redis Stream 消费完</span><br>
+<span class="t-info">[summary] operation=total_19  error=total_7  login=total_5</span><br><br>
+<span class="t-ts"># 用 PowerShell 一口气查三个</span><br>
+<span class="t-cmd">$h = @{Authorization='Bearer 1:admin:admin';'x-user-role'='admin'}</span><br>
+<span class="t-cmd">Invoke-RestMethod 'http://localhost:8000/api/v1/logs/operation?pageSize=1' -Headers $h</span><br>
+<span class="t-info">→ data.total = 19</span><br>
+<span class="t-cmd">Invoke-RestMethod 'http://localhost:8000/api/v1/logs/error?pageSize=1' -Headers $h</span><br>
+<span class="t-info">→ data.total = 7</span><br>
+<span class="t-cmd">Invoke-RestMethod 'http://localhost:8000/api/v1/logs/login?pageSize=1' -Headers $h</span><br>
+<span class="t-info">→ data.total = 5</span><br><br>
+<span class="t-ts"># 再查那条全链路 traceId</span><br>
+<span class="t-cmd">Invoke-RestMethod 'http://localhost:8000/api/v1/logs/trace/demo-chain-xxx' -Headers $h</span><br>
+<span class="t-info">→ operationCount=1  errorCount=1  ✅ 两表都命中</span>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="border-color:var(--purple);">
+        <div class="card-title" style="color:var(--purple);">🎯 讲解点</div>
+        <div class="card-desc">
+          <b>reset → seed → 查询，这个闭环就是我们 20 分钟分享的主线。</b><br><br>
+          老师可以现场看到：reset 前 total 可能是几十上百，reset 后立刻变 0，seed 跑完立刻变成我们造的数。没有"等一会儿"、没有清缓存、没有重启服务——这就是 Redis Stream 异步消费的实时性。<br><br>
+          三表数量：<b>operation 19 = 3 中间件 + 16 埋点</b>；<b>error 7 = 6 前端 + 1 后端非法 JSON</b>；<b>login 5 = 1 成功 + 4 失败</b>。每个数都有来源，经得起追问。
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="notes">Demo 第 7 段：汇总查询，reset-seed-query 闭环</div>
+</section>
+
+<!-- ============ 22. Section: 总结 ============ -->
 <section class="slide section-divider-slide deco-grid" data-deck-label="章节5：总结">
   <div class="chapter">CHAPTER 05</div>
   <div class="section-title">踩坑总结 & Takeaways</div>
