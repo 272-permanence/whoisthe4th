@@ -23,12 +23,38 @@ export interface HourlyPoint {
   count: number;
 }
 
+export interface LostFoundStatusDist {
+  open: number;
+  resolved: number;
+  expired: number;
+}
+
+export interface LostFoundTypeDist {
+  lost: number;
+  found: number;
+}
+
+export interface LostFoundCategory {
+  category: string;
+  count: number;
+}
+
+export interface LostFoundStats {
+  total: number;
+  todayCount: number;
+  statusDist: LostFoundStatusDist;
+  typeDist: LostFoundTypeDist;
+  topCategories: LostFoundCategory[];
+}
+
 export interface AnalyticsStats {
   totalVisits: number;
   todayVisits: number;
   sentimentDist: SentimentDist;
   hotQuestions: HotQuestion[];
   hourlyTrend: HourlyPoint[];
+  lostFound: LostFoundStats;
+  lfTrend: HourlyPoint[];
   updatedAt: string;
 }
 

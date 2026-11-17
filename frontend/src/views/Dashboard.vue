@@ -13,13 +13,9 @@ import { apiFetch } from '../common/apiClient';
 
 const router = useRouter();
 
-/** 返回上一页；直接打开本页（无历史记录）时兜底回首页 */
+/** 返回项目首页（不用 router.back，避免退到项目外的页面） */
 function goBack(): void {
-  if (window.history.length > 1) {
-    router.back();
-  } else {
-    router.push('/home');
-  }
+  router.push('/home');
 }
 
 // ==================== 日志审计相关 ====================
@@ -127,9 +123,19 @@ const totalVisits = ref(0);
 const todayVisits = ref(0);
 const updatedAt = ref('');
 
+// 失物招领指标
+const lfTotal = ref(0);
+const lfTodayCount = ref(0);
+const lfOpenCount = ref(0);
+const lfResolvedCount = ref(0);
+const lfLostCount = ref(0);
+const lfFoundCount = ref(0);
+
 const sentimentChart = shallowRef<echarts.ECharts | null>(null);
 const hotChart = shallowRef<echarts.ECharts | null>(null);
 const trendChart = shallowRef<echarts.ECharts | null>(null);
+const lfStatusChart = shallowRef<echarts.ECharts | null>(null);
+const lfCategoryChart = shallowRef<echarts.ECharts | null>(null);
 
 let closeStream: (() => void) | null = null;
 
@@ -149,16 +155,20 @@ onBeforeUnmount(() => {
   sentimentChart.value?.dispose();
   hotChart.value?.dispose();
   trendChart.value?.dispose();
+  lfStatusChart.value?.dispose();
+  lfCategoryChart.value?.dispose();
   hotPoisChart.value?.dispose();
 });
 
 /**
- * 初始化三个图表实例
+ * 初始化所有图表实例
  */
 function initCharts() {
   sentimentChart.value = echarts.init(document.getElementById('sentiment-chart')!);
   hotChart.value = echarts.init(document.getElementById('hot-chart')!);
   trendChart.value = echarts.init(document.getElementById('trend-chart')!);
+  lfStatusChart.value = echarts.init(document.getElementById('lf-status-chart')!);
+  lfCategoryChart.value = echarts.init(document.getElementById('lf-category-chart')!);
 }
 
 /**
@@ -169,9 +179,83 @@ function updateDashboard(stats: AnalyticsStats) {
   todayVisits.value = stats.todayVisits;
   updatedAt.value = stats.updatedAt;
 
+  // 失物招领指标
+  if (stats.lostFound) {
+    lfTotal.value = stats.lostFound.total;
+    lfTodayCount.value = stats.lostFound.todayCount;
+    lfOpenCount.value = stats.lostFound.statusDist.open;
+    lfResolvedCount.value = stats.lostFound.statusDist.resolved;
+    lfLostCount.value = stats.lostFound.typeDist.lost;
+    lfFoundCount.value = stats.lostFound.typeDist.found;
+    updateLfStatusChart(stats.lostFound.statusDist, stats.lostFound.typeDist);
+    updateLfCategoryChart(stats.lostFound.topCategories);
+  }
+
   updateSentimentChart(stats.sentimentDist);
   updateHotChart(stats.hotQuestions);
   updateTrendChart(stats.hourlyTrend);
+}
+
+/**
+ * 失物招领状态 + 类型分布饼图（双饼图）
+ */
+function updateLfStatusChart(
+  statusDist: AnalyticsStats['lostFound']['statusDist'],
+  typeDist: AnalyticsStats['lostFound']['typeDist']
+) {
+  lfStatusChart.value?.setOption({
+    title: [
+      { text: '失物招领状态分布', left: '25%', top: '5%', textStyle: { color: '#fff', fontSize: 14 } },
+      { text: '丢失 vs 捡到', left: '75%', top: '5%', textStyle: { color: '#fff', fontSize: 14 } }
+    ],
+    tooltip: { trigger: 'item' },
+    series: [
+      {
+        type: 'pie',
+        radius: ['30%', '55%'],
+        center: ['25%', '60%'],
+        label: { color: '#fff' },
+        data: [
+          { value: statusDist.open, name: '待处理', itemStyle: { color: '#faad14' } },
+          { value: statusDist.resolved, name: '已解决', itemStyle: { color: '#52c41a' } },
+          { value: statusDist.expired, name: '已过期', itemStyle: { color: '#8c8c8c' } }
+        ]
+      },
+      {
+        type: 'pie',
+        radius: ['30%', '55%'],
+        center: ['75%', '60%'],
+        label: { color: '#fff' },
+        data: [
+          { value: typeDist.lost, name: '丢失', itemStyle: { color: '#ff4d4f' } },
+          { value: typeDist.found, name: '捡到', itemStyle: { color: '#1890ff' } }
+        ]
+      }
+    ]
+  });
+}
+
+/**
+ * 失物招领热门分类 TOP5 横向柱状图
+ */
+function updateLfCategoryChart(categories: AnalyticsStats['lostFound']['topCategories']) {
+  const names = categories.map(c => c.category);
+  const counts = categories.map(c => c.count);
+
+  lfCategoryChart.value?.setOption({
+    title: { text: '失物招领热门分类 TOP5', left: 'center', textStyle: { color: '#fff', fontSize: 16 } },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    grid: { left: '3%', right: '6%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'value', axisLabel: { color: '#ccc' } },
+    yAxis: { type: 'category', data: names, axisLabel: { color: '#ccc' } },
+    series: [{
+      type: 'bar',
+      data: counts,
+      itemStyle: { color: '#b37feb' },
+      barWidth: '50%',
+      label: { show: true, position: 'right', color: '#fff' }
+    }]
+  });
 }
 
 /**
@@ -245,6 +329,8 @@ function resizeCharts() {
   sentimentChart.value?.resize();
   hotChart.value?.resize();
   trendChart.value?.resize();
+  lfStatusChart.value?.resize();
+  lfCategoryChart.value?.resize();
   hotPoisChart.value?.resize();
 }
 </script>
@@ -289,6 +375,20 @@ function resizeCharts() {
         <div class="card-label">今日服务人次</div>
         <div class="card-value">{{ todayVisits.toLocaleString() }}</div>
       </div>
+      <div class="card">
+        <div class="card-label">失物招领总数</div>
+        <div class="card-value">{{ lfTotal.toLocaleString() }}</div>
+        <div class="card-sub">今日新增 {{ lfTodayCount }}</div>
+      </div>
+      <div class="card">
+        <div class="card-label">待处理</div>
+        <div class="card-value" style="color: #faad14">{{ lfOpenCount.toLocaleString() }}</div>
+        <div class="card-sub">已解决 {{ lfResolvedCount }}</div>
+      </div>
+      <div class="card">
+        <div class="card-label">丢失 / 捡到</div>
+        <div class="card-value">{{ lfLostCount }}<span class="card-unit">/</span>{{ lfFoundCount }}</div>
+      </div>
     </section>
 
     <!-- 图表区 -->
@@ -299,8 +399,14 @@ function resizeCharts() {
       <div class="chart-box">
         <div id="hot-chart" class="chart"></div>
       </div>
-      <div class="chart-box full-width">
+      <div class="chart-box">
         <div id="trend-chart" class="chart"></div>
+      </div>
+      <div class="chart-box">
+        <div id="lf-status-chart" class="chart"></div>
+      </div>
+      <div class="chart-box full-width">
+        <div id="lf-category-chart" class="chart"></div>
       </div>
     </section>
     </template>
@@ -458,6 +564,18 @@ function resizeCharts() {
   font-size: 42px;
   font-weight: bold;
   color: #36cfc9;
+}
+
+.card-unit {
+  font-size: 20px;
+  margin-left: 4px;
+  color: #8c8c8c;
+}
+
+.card-sub {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #8c8c8c;
 }
 
 .charts {

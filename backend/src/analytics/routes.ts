@@ -231,12 +231,67 @@ function computeStats() {
   // 补全 24 小时的数据点
   const trend = build24HourTrend(hourlyRows);
 
+  // ========== 失物招领统计 ==========
+  // 6. 状态分布（open 待处理 / resolved 已解决 / expired 已过期）
+  const lfStatusRows = await executeRead<{ status: string; count: number }[]>(
+    `SELECT status, COUNT(*) as count FROM lost_found GROUP BY status`
+  );
+  const lfStatusDist = { open: 0, resolved: 0, expired: 0 };
+  for (const row of lfStatusRows) {
+    if (row.status in lfStatusDist) {
+      (lfStatusDist as Record<string, number>)[row.status] = Number(row.count);
+    }
+  }
+  const lfTotal = lfStatusDist.open + lfStatusDist.resolved + lfStatusDist.expired;
+
+  // 7. 类型分布（lost 丢失 / found 捡到）
+  const lfTypeRows = await executeRead<{ type: string; count: number }[]>(
+    `SELECT type, COUNT(*) as count FROM lost_found GROUP BY type`
+  );
+  const lfTypeDist = { lost: 0, found: 0 };
+  for (const row of lfTypeRows) {
+    if (row.type in lfTypeDist) {
+      (lfTypeDist as Record<string, number>)[row.type] = Number(row.count);
+    }
+  }
+
+  // 8. 今日新增
+  const lfTodayRows = await executeRead<{ count: number }[]>(
+    `SELECT COUNT(*) as count FROM lost_found WHERE DATE(created_at) = CURDATE()`
+  );
+  const lfTodayCount = Number(lfTodayRows[0]?.count ?? 0);
+
+  // 9. 热门分类 TOP5
+  const lfCategoryRows = await executeRead<{ category: string; count: number }[]>(
+    `SELECT category, COUNT(*) as count FROM lost_found
+     GROUP BY category ORDER BY count DESC LIMIT 5`
+  );
+  const lfTopCategories = lfCategoryRows.map(r => ({ category: r.category, count: Number(r.count) }));
+
+  // 10. 近 24 小时失物招领新增趋势
+  const lfHourlyRows = await executeRead<{ hour: string; count: number }[]>(
+    `SELECT DATE_FORMAT(created_at, '%Y-%m-%d %H:00:00') as hour, COUNT(*) as count
+     FROM lost_found
+     WHERE created_at >= DATE_SUB(NOW(), INTERVAL 23 HOUR)
+     GROUP BY hour
+     ORDER BY hour`
+  );
+  const lfTrend = build24HourTrend(lfHourlyRows.map(r => ({ hour: r.hour, count: Number(r.count) })));
+
   return {
     totalVisits,
     todayVisits,
     sentimentDist,
     hotQuestions,
     hourlyTrend: trend,
+    lostFound: {
+      total: lfTotal,
+      todayCount: lfTodayCount,
+      statusDist: lfStatusDist,
+      typeDist: lfTypeDist,
+      topCategories: lfTopCategories
+    },
+    lfTrend,
     updatedAt: new Date().toISOString()
   };
 }

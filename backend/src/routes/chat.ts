@@ -5,6 +5,8 @@ import { saveConversation, saveRagSources, newSessionId, ensureSession, loadSess
 import { initSseStream, sendSseEvent, startSseHeartbeat, SseEventEnum } from '../common/sse.js';
 import { createLogger } from '../common/logger.js';
 import { ErrorCodeEnum } from '../common/errorCodes.js';
+import { analyzeSentiment, SENTIMENT_MODEL } from '../analytics/sentiment.js';
+import { executeWrite } from '../analytics/db.js';
 
 const router = Router();
 const log = createLogger('chat-stream');
@@ -66,13 +68,12 @@ router.post('/stream', async (req: Request, res: Response) => {
 
   // ========== RAG 语义检索 ==========
   let ragSources: RagSource[] = [];
-  let ragContext = '';
   try {
     if (userQuestion) {
       const hits = await searchKnowledge(userQuestion, 5);
       if (hits.length > 0) {
         ragSources = buildSources(hits);
-        ragContext = buildRagContext(hits);
+        const ragContext = buildRagContext(hits);
         // 把检索到的知识块注入到 system prompt
         const systemMsg = chatMessages.find(m => m.role === 'system');
         if (systemMsg) {
@@ -127,8 +128,10 @@ router.post('/stream', async (req: Request, res: Response) => {
       }
     }
 
-    // ========== LLM 流式生成 ==========
-    const fullAssistantReply = await streamFromDashScope(chatMessages, res, ragSources, sessionId);
+    // ========== LLM 流式生成（API Key 未配置时自动 mock 降级）==========
+    const fullAssistantReply = config.dashscope.apiKey && config.dashscope.apiKey !== 'sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+      ? await streamFromDashScope(chatMessages, res, ragSources, sessionId)
+      : await streamMockReply(chatMessages, res, ragSources, sessionId);
 
     // ========== 持久化到 MySQL ==========
     const ragUsed = ragSources.length > 0;
@@ -149,6 +152,26 @@ router.post('/stream', async (req: Request, res: Response) => {
       })));
     }
     log.INFO(`conversation-store 已持久化 session=${sessionId} ragUsed=${ragUsed}`);
+
+    // ========== 大屏埋点：写入 interaction_log + sentiment_data ==========
+    // 数字人问答完成后，把这次交互上报到数据看板（不影响主流程，失败仅打日志）
+    try {
+      if (userQuestion) {
+        const { score, label } = analyzeSentiment(userQuestion);
+        const logResult = await executeWrite<{ insertId: number }>(
+          `INSERT INTO interaction_log (user_id, message, response, scenic_spot)
+           VALUES (?, ?, ?, ?)`,
+          [sessionId, userQuestion, fullAssistantReply || null, null]
+        );
+        await executeWrite(
+          `INSERT INTO sentiment_data (log_id, score, label, model) VALUES (?, ?, ?, ?)`,
+          [logResult.insertId, score, label, SENTIMENT_MODEL]
+        );
+        log.INFO(`大屏埋点 logId=${logResult.insertId} label=${label}`);
+      }
+    } catch (err) {
+      log.WARN(`大屏埋点写入失败（不影响主流程）: ${err instanceof Error ? err.message : err}`);
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log.ERROR(`SSE ERROR: ${msg}`);
@@ -161,10 +184,40 @@ router.post('/stream', async (req: Request, res: Response) => {
 });
 
 /**
+ * DashScope API Key 未配置时的 mock 降级：逐 token 输出模板回答，
+ * 保持与真实 LLM 相同的 SSE 事件格式，前端无需任何改动即可播放。
+ */
+async function streamMockReply(
+  messages: Array<{ role: string; content: string }>,
+  res: Response,
+  ragSources: RagSource[] = [],
+  sessionId?: string,
+): Promise<string> {
+  const userMsg = [...messages].reverse().find(m => m.role === 'user')?.content ?? '';
+  const mockTemplates = [
+    `关于「${userMsg}」，西湖景区有很多值得探索的地方。`,
+    '推荐您先游览断桥残雪，这是西湖十景之一，免费开放。',
+    '如果您有一整天的时间，可以按断桥 → 白堤 → 平湖秋月 → 孤山 → 西泠桥的顺序游览。',
+    '午餐可以考虑楼外楼的西湖醋鱼，是杭州的传统名菜。',
+  ];
+  const fullText = mockTemplates.join('');
+
+  // 逐字推送 token，模拟流式输出（每 40ms 一个字）
+  for (let i = 0; i < fullText.length; i++) {
+    sendSseEvent(res, 'token', { content: fullText[i] }, i);
+    await new Promise(r => setTimeout(r, 40));
+  }
+  sendSseEvent(res, SseEventEnum.DONE, { fullContent: fullText, sources: ragSources, sessionId }, fullText.length);
+  log.INFO(`chat-mock 返回 mock 回答（${fullText.length} 字），DASHSCOPE_API_KEY 未配置`);
+  return fullText;
+}
+
+/**
  * 向后端客户端（DashScope）发起流式请求，转发给前端
  * @param messages 对话消息数组
  * @param res Express Response
- * @param signal 用于中断上游请求的 AbortSignal
+ * @param ragSources RAG 引用来源
+ * @param sessionId 会话 ID（多轮对话用）
  */
 async function streamFromDashScope(
   messages: Array<{ role: string; content: string }>,
