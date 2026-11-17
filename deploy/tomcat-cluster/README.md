@@ -44,14 +44,13 @@ foreach ($n in 1,2) {
   $webroot = "$base\tomcat$n\webapps\ROOT"
   Get-ChildItem $webroot -Force | Remove-Item -Recurse -Force
   Copy-Item "dist\*" $webroot -Recurse -Force
-  New-Item "$webroot\WEB-INF" -ItemType Directory -Force | Out-Null
-  Copy-Item "$base\webapp\WEB-INF\web.xml" "$webroot\WEB-INF\web.xml" -Force
+  Copy-Item "$base\webapp\*" $webroot -Recurse -Force
   Set-Content "$webroot\node-id.txt" "Tomcat Node $n" -Encoding ASCII
 }
 ```
 
 - 两个节点各持有一份完整前端资源，Nginx 轮询分发。
-- `WEB-INF/web.xml` 把 404 回退到 `index.html`，支持 `/pois` 等前端路由直接刷新。
+- `webapp/` 模板包含 `WEB-INF/web.xml` 与 RewriteValve 配置，把未命中的前端路由回退到 `index.html`，支持 `/pois` 等路径直接刷新。
 - 前端使用同源 API（`frontend/.env.production` 中 `VITE_API_BASE_URL=` 留空），跨域会导致接口失败。
 - 每次前端改动后重新 `npm run build` 并重复上述复制步骤。
 
