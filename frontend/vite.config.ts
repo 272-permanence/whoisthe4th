@@ -23,8 +23,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        // 临时指向 8010：8000 被其他进程占用，联调结束后改回 8000
-        target: 'http://localhost:8010',
+        target: 'http://localhost:8000',
         changeOrigin: true,
       },
     },
