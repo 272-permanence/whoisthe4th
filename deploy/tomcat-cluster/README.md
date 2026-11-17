@@ -50,7 +50,7 @@ foreach ($n in 1,2) {
 ```
 
 - 两个节点各持有一份完整前端资源，Nginx 轮询分发。
-- `webapp/` 模板包含 `WEB-INF/web.xml` 与 RewriteValve 配置，把未命中的前端路由回退到 `index.html`，支持 `/pois` 等路径直接刷新。
+- Nginx 对 `/assets/` 不做回退，静态资源缺失会返回 404；其余未命中的前端路由回退到 `index.html`，支持 `/pois` 等路径直接刷新。
 - 前端使用同源 API（`frontend/.env.production` 中 `VITE_API_BASE_URL=` 留空），跨域会导致接口失败。
 - 每次前端改动后重新 `npm run build` 并重复上述复制步骤。
 

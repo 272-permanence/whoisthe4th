@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<Context>
-  <!-- 开启 SPA history 路由重写：未命中的前端路由回退到 index.html -->
-  <Valve className="org.apache.catalina.valves.rewrite.RewriteValve" />
-</Context>
