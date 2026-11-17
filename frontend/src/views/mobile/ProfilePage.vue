@@ -45,7 +45,7 @@ const menuGroups = computed(() => [
   {
     title: '账号',
     items: [
-      { icon: 'contact', label: '联系我们', onClick: () => showToast('功能待开发') },
+      { icon: 'contact', label: '在线客服', onClick: () => router.push('/cs') },
     ],
   },
 ]);

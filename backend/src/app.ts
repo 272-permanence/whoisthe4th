@@ -7,10 +7,12 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import cors from 'cors';
 import multer from 'multer';
+import http from 'node:http';
 import { config } from './config.js';
 import { ErrorCodeEnum } from './constants/errorCodes.js';
 import { HttpError } from './utils/httpError.js';
 import { createLogger } from './common/logger.js';
+import { initCsSocket } from './ws/index.js';
 
 // ========== 路由导入 ==========
 // 成员A：语音交互 + 数据分析
@@ -39,6 +41,7 @@ import homeRouter from './routes/home.js';
 import guideRouter from './routes/guide.js';
 import poiRouter from './routes/poi.js';
 import logsRouter from './routes/logs.js';
+import csRouter from './routes/cs.js';
 
 // ========== 初始化函数 & 中间件 ==========
 import { initAnalyticsTables, closeDb } from './analytics/db.js';
@@ -105,6 +108,7 @@ app.use('/api/v1/home', homeRouter);
 app.use('/api/v1/routes', guideRouter);
 app.use('/api/v1/poi', poiRouter);
 app.use('/api/v1/logs', logsRouter);
+app.use('/api/v1/cs', csRouter);
 
 // ========== 健康检查 ==========
 app.get('/health', (_req, res) => {
@@ -156,12 +160,19 @@ async function bootstrap(): Promise<void> {
     }
     await startAnalyticsPush();
 
-    app.listen(config.port, () => {
+    // 创建 HTTP server（Socket.IO 需要挂载在同一个 server 上）
+    const server = http.createServer(app);
+
+    // 挂载客服聊天 Socket.IO
+    initCsSocket(server);
+
+    server.listen(config.port, () => {
       log.INFO(`后端服务已启动: http://localhost:${config.port}`);
       log.INFO(`允许跨域的前端地址: ${config.frontendUrl}`);
       log.INFO(`语音交互接口: POST /api/v1/asr-tts/asr | GET /api/v1/tts/stream (新) | GET /api/v1/asr-tts/tts/stream (旧，redirect)`);
       log.INFO(`日志审计接口: GET /api/v1/logs/{operation|error|login} | GET /api/v1/logs/trace/:traceId`);
       log.INFO(`大屏统计: GET /api/v1/analytics/stats | SSE /api/v1/analytics/stream`);
+      log.INFO(`客服聊天: Socket.IO namespace /cs`);
     });
   } catch (error) {
     log.ERROR(`后端服务启动失败: ${error instanceof Error ? error.message : String(error)}`);

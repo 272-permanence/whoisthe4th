@@ -56,6 +56,14 @@ const routes = [
     meta: { title: '发布失物招领' },
   },
 
+  // ============ 客服聊天（用户端，独立移动端页面） ============
+  {
+    path: '/cs',
+    name: 'customer-service',
+    component: () => import('../views/mobile/CustomerService.vue'),
+    meta: { title: '在线客服', public: true },
+  },
+
   // ============ 游玩攻略（成员D，独立移动端页面） ============
   {
     path: '/routes',
@@ -165,6 +173,13 @@ const routes = [
         name: 'admin-users',
         component: () => import('../views/admin/UserAdmin.vue'),
         meta: { title: '用户管理' },
+      },
+      // 客服工作台（成员D · WebSocket 实时聊天）
+      {
+        path: 'cs',
+        name: 'admin-cs',
+        component: () => import('../views/admin/CsWorkbench.vue'),
+        meta: { title: '客服工作台' },
       },
     ],
   },
