@@ -7,12 +7,9 @@
  * @date 2026-10-27
  */
 import { computed } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { useUserStore } from '../stores/user';
+import { useRoute } from 'vue-router';
 
 const route = useRoute();
-const router = useRouter();
-const userStore = useUserStore();
 
 const active = computed(() => route.path);
 
@@ -29,11 +26,7 @@ const tabs: TabItem[] = [
   { label: '我的', to: '/profile', icon: 'user-o' },
 ];
 
-function onSwitch(path: string) {
-  if (path !== route.path) {
-    router.push(path);
-  }
-}
+// onSwitch 保留供未来复用（TS noUnusedLocals 会检查，暂移除此处）
 </script>
 
 <template>

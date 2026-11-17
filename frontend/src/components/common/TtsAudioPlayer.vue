@@ -12,7 +12,7 @@
  *                <button @click="playerRef.speak('你好')">说</button>
  *                <button @click="playerRef.stop()">停</button>
  */
-import { ref, watch } from 'vue';
+import { watch } from 'vue';
 import { useTtsStream } from '../../composables/useTtsStream';
 import Avatar from './Avatar.vue';
 
@@ -65,7 +65,7 @@ watch(controller.errorMessage, (msg) => {
 <template>
   <div class="tts-player">
     <!-- 内嵌 Avatar（breathing 静止 / lip-sync 跟随音频振幅） -->
-    <Avatar mode="lip-sync" size="md" :mouth-open="controller.mouthOpen" :is-speaking="controller.isStreaming" />
+    <Avatar mode="lip-sync" size="md" :mouth-open="controller.mouthOpen.value" :is-speaking="controller.isStreaming.value" />
 
     <!-- 状态提示 -->
     <div class="tts-player__status" v-if="controller.provider">

@@ -384,8 +384,8 @@ onMounted(async () => {
                 <option v-for="o in CATEGORY_OPTIONS" :key="o.value" :value="o.value">{{ o.text }}</option>
               </select>
             </label>
-            <label>位置 <input v-model="(poiForm.location ?? '') as string" placeholder="如：西湖区龙井路1号" /></label>
-            <label>简介 <textarea v-model="(poiForm.description ?? '') as string" rows="3"></textarea></label>
+            <label>位置 <input v-model="poiForm.location" placeholder="如：西湖区龙井路1号" /></label>
+            <label>简介 <textarea v-model="poiForm.description" rows="3"></textarea></label>
             <div class="modal-actions">
               <button @click="poiDialog = false">取消</button>
               <button class="primary" @click="savePoi">保存</button>
@@ -428,7 +428,7 @@ onMounted(async () => {
             <label>名称 * <input v-model="routeForm.name" /></label>
             <label>主题 <input v-model="routeForm.theme" /></label>
             <label>预计分钟数 <input type="number" v-model.number="routeForm.estimated_minutes" /></label>
-            <label>简介 <textarea v-model="(routeForm.description ?? '') as string" rows="2"></textarea></label>
+            <label>简介 <textarea v-model="routeForm.description" rows="2"></textarea></label>
             <div class="modal-actions">
               <button @click="routeDialog = false">取消</button>
               <button class="primary" @click="saveRoute">保存</button>

@@ -8,7 +8,7 @@
  */
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { showToast, showLoadingToast, closeToast, showConfirmDialog } from 'vant';
+import { showToast, showConfirmDialog } from 'vant';
 import { getLostFoundList, updateLostFoundStatus, deleteLostFound, type LostFoundItem } from '../../api';
 
 const router = useRouter();
@@ -46,6 +46,8 @@ const loading = ref(false);
 const finished = ref(false);
 const showSearch = ref(false);
 const searchKeyword = ref('');
+// 上拉刷新状态（van-pull-refresh 双向绑定）
+const refreshing = ref(false);
 
 // 构建筛选参数
 const queryParams = computed(() => {
@@ -97,13 +99,8 @@ async function loadList(reset = false) {
 
 // Tab 切换
 function onTypeChange(type: string | number) {
-  activeType.value = (type as string) || '';
-  loadList(true);
-}
-
-// 重置筛选
-function resetFilters() {
-  filters.value = { category: '', status: '', keyword: '' };
+  const t = (type as string) || '';
+  activeType.value = (t === 'lost' || t === 'found' ? t : '') as '' | 'lost' | 'found';
   loadList(true);
 }
 

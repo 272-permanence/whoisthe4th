@@ -178,7 +178,7 @@ async function onSubmit() {
     <!-- 分类 picker -->
     <van-popup v-model:show="showCategoryPicker" position="bottom">
       <van-picker
-        columns="categoryPickerColumns"
+        :columns="categoryPickerColumns"
         @confirm="onConfirmCategory"
         @cancel="showCategoryPicker = false"
       />

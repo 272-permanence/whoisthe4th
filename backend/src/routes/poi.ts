@@ -41,9 +41,9 @@ router.get('/', async (req: Request, res: Response) => {
 
     const rows = await executeRead<Array<{
       id: number; name: string; category: string; description: string | null;
-      location: string | null; status: number;
+      location: string | null; longitude: number | null; latitude: number | null; status: number;
     }>>(
-      `SELECT id, name, category, description, location, status
+      `SELECT id, name, category, description, location, longitude, latitude, status
        FROM poi
        WHERE ${showAll ? '1=1' : 'status = 1'}
              ${category ? 'AND category = ?' : ''}

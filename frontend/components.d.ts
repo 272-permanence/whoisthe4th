@@ -13,7 +13,6 @@ declare module 'vue' {
   export interface GlobalComponents {
     Avatar: typeof import('./src/components/common/Avatar.vue')['default']
     ConversationList: typeof import('./src/components/interaction/ConversationList.vue')['default']
-    DigitalHumanAvatar: typeof import('./src/components/interaction/DigitalHumanAvatar.vue')['default']
     HelloWorld: typeof import('./src/components/HelloWorld.vue')['default']
     Live2dAvatar: typeof import('./src/components/interaction/Live2dAvatar.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
@@ -26,7 +25,6 @@ declare module 'vue' {
     VanDropdownItem: typeof import('vant/es')['DropdownItem']
     VanDropdownMenu: typeof import('vant/es')['DropdownMenu']
     VanEmpty: typeof import('vant/es')['Empty']
-    VanFab: typeof import('vant/es')['Fab']
     VanField: typeof import('vant/es')['Field']
     VanForm: typeof import('vant/es')['Form']
     VanGrid: typeof import('vant/es')['Grid']
