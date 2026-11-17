@@ -11,6 +11,8 @@ export interface AmapMap {
   remove(overlay: unknown | unknown[]): void;
   setFitView(overlays?: unknown[], immediately?: boolean, avoidOutOfView?: boolean, allowPolyline?: boolean): void;
   setZoomAndCenter(zoom: number, center: [number, number]): void;
+  getZoom(): number;
+  on(event: string, handler: () => void): void;
   destroy(): void;
 }
 
@@ -19,10 +21,17 @@ export interface AmapOverlay {
   setMap(map: AmapMap | null): void;
 }
 
+/** 标记点实例 */
+export interface AmapMarker extends AmapOverlay {
+  on(event: string, handler: () => void): void;
+  setPosition(position: [number, number]): void;
+  setContent(content: string): void;
+}
+
 /** 高德命名空间（只声明本项目用到的构造器） */
 export interface AmapNamespace {
   Map: new (container: HTMLElement | string, options?: Record<string, unknown>) => AmapMap;
-  Marker: new (options: Record<string, unknown>) => AmapOverlay;
+  Marker: new (options: Record<string, unknown>) => AmapMarker;
   Polyline: new (options: Record<string, unknown>) => AmapOverlay;
 }
 

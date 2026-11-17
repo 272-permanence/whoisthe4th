@@ -3,7 +3,8 @@
  * @author 第八组（成员B 查询与导航 + 成员D 后台 CRUD）
  * @date 2026-11-17
  */
-import { apiFetch } from '../common/apiClient';
+import { apiFetch, getTraceId } from '../common/apiClient';
+import { API_BASE_URL } from '../constants/apiConstants';
 
 export interface PoiItem {
   id: number; name: string; category: string; description?: string | null;
@@ -83,7 +84,7 @@ export function listPois(params: PoiQuery = {}): Promise<Poi[]> {
  * @param mode 步行 / 驾车
  * @returns 路径规划结果
  */
-export function planNavigation(
+export async function planNavigation(
   origin: NavigationPoint,
   destination: NavigationPoint,
   mode: TravelMode
@@ -93,7 +94,20 @@ export function planNavigation(
     destination: `${destination.lng},${destination.lat}`,
     mode
   });
-  return apiFetch<NavigationResult>(`/api/v1/navigation/route?${query.toString()}`, { apiPrefix: PREFIX });
+  // 导航失败时后端会返回具体原因（如超出步行范围），这里直接透出给页面展示
+  const response = await fetch(`${API_BASE_URL}/api/v1/navigation/route?${query.toString()}`, {
+    headers: { Accept: 'application/json', 'X-Trace-Id': getTraceId() }
+  });
+  const payload = (await response.json().catch(() => null)) as
+    | { code: number; message: string; data: NavigationResult }
+    | null;
+  if (payload && payload.code !== 0) {
+    throw new Error(payload.message || '路线规划失败');
+  }
+  if (!response.ok || !payload) {
+    throw new Error(`路线规划失败（HTTP ${response.status}）`);
+  }
+  return payload.data;
 }
 
 export function fetchPois(all = false): Promise<PoiItem[]> {

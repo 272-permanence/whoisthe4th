@@ -122,6 +122,15 @@ router.get('/route', async (req: Request, res: Response, next: NextFunction) => 
     const payload = (await response.json()) as AmapDirectionResponse;
     if (payload.status !== '1') {
       log.WARN(`高德返回异常: ${payload.info ?? 'unknown'} (${payload.infocode ?? '-'})`);
+      if (payload.info === 'OVER_DIRECTION_RANGE') {
+        throw new HttpError(
+          400,
+          ErrorCodeEnum.INVALID_PARAM,
+          mode === 'walking'
+            ? '起终点距离超出步行范围（约 100 公里），请改用驾车或更换起点'
+            : '起终点距离超出驾车规划范围，请更换起点'
+        );
+      }
       throw new HttpError(502, ErrorCodeEnum.INTERNAL_ERROR, `高德路径规划失败：${payload.info ?? '未知错误'}`);
     }
 
