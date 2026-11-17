@@ -1,7 +1,6 @@
-# Tomcat 集群演示环境
+# Tomcat 集群部署环境
 
-Nginx 反向代理 + 双 Tomcat 节点轮询负载均衡的最小可运行集群，用于课程演示。
-集群内运行的只是演示页（`webapps/ROOT/index.html`），真实业务代码在 Node.js 后端（`backend/`），不要混淆。
+Nginx 反向代理 + 双 Tomcat 节点轮询负载均衡。前端生产构建产物部署到两个节点的 `webapps/ROOT`，`/api` 由 Nginx 反向代理到 Node 后端（8000）。
 
 ## 目录结构
 
@@ -9,7 +8,8 @@ Nginx 反向代理 + 双 Tomcat 节点轮询负载均衡的最小可运行集群
 tomcat-cluster/
 ├── tomcat1/          Tomcat 9.0.123 节点 1（HTTP 8080，jvmRoute=tomcat1）
 ├── tomcat2/          Tomcat 9.0.123 节点 2（HTTP 8081，jvmRoute=tomcat2）
-└── nginx/            Nginx 1.29.8 统一入口（HTTP 80，upstream 轮询两个节点）
+├── nginx/            Nginx 1.29.8 统一入口（HTTP 80，upstream 轮询两个节点）
+└── webapp/           部署模板（WEB-INF/web.xml，404 回退 index.html）
 ```
 
 ## 端口占用
@@ -28,6 +28,32 @@ tomcat-cluster/
 
 - JDK 17（`set JAVA_HOME` 指向本机 JDK 目录，例如 `C:\Program Files\Java\jdk-17`）
 - Windows PowerShell
+- 后端已在 `http://localhost:8000` 运行
+
+## 部署前端到集群
+
+```powershell
+$root = "<仓库根目录>"
+$base = "$root\deploy\tomcat-cluster"
+
+Push-Location "$root\frontend"
+npm run build
+Pop-Location
+
+foreach ($n in 1,2) {
+  $webroot = "$base\tomcat$n\webapps\ROOT"
+  Get-ChildItem $webroot -Force | Remove-Item -Recurse -Force
+  Copy-Item "dist\*" $webroot -Recurse -Force
+  New-Item "$webroot\WEB-INF" -ItemType Directory -Force | Out-Null
+  Copy-Item "$base\webapp\WEB-INF\web.xml" "$webroot\WEB-INF\web.xml" -Force
+  Set-Content "$webroot\node-id.txt" "Tomcat Node $n" -Encoding ASCII
+}
+```
+
+- 两个节点各持有一份完整前端资源，Nginx 轮询分发。
+- `WEB-INF/web.xml` 把 404 回退到 `index.html`，支持 `/pois` 等前端路由直接刷新。
+- 前端使用同源 API（`frontend/.env.production` 中 `VITE_API_BASE_URL=` 留空），跨域会导致接口失败。
+- 每次前端改动后重新 `npm run build` 并重复上述复制步骤。
 
 ## 启动
 
@@ -68,13 +94,17 @@ powershell -ExecutionPolicy Bypass -File .\stop-all.ps1
 ## 验证
 
 ```powershell
-# 连续访问 5 次，节点 1 / 节点 2 交替出现即为轮询生效
-1..5 | ForEach-Object { (Invoke-WebRequest "http://localhost/" -UseBasicParsing).Content }
+# 连续访问 6 次，输出 Tomcat Node 1 / Tomcat Node 2 交替即为轮询生效
+1..6 | ForEach-Object { curl.exe -s http://localhost/node-id.txt }
+
+# 经 Nginx 访问后端接口
+curl.exe -s http://localhost/api/v1/home
 ```
 
-- `http://localhost/` → 轮询到节点 1 或节点 2
-- `http://localhost/n1/` → 固定走节点 1
-- `http://localhost/n2/` → 固定走节点 2
+- `http://localhost/` → 景区导览前端（Nginx 轮询到两个节点）
+- `http://localhost/pois`、`/navigate` → 前端路由，可直接刷新
+- `http://localhost/api/v1/home` → Nginx 转发到 Node 后端
+- `http://localhost/n1/`、`/n2/` → 固定走节点 1 / 节点 2
 - `http://localhost:8080/`、`http://localhost:8081/` → 直连各节点
 
 ## 停止

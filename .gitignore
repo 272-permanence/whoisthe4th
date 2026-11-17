@@ -13,8 +13,11 @@ dist/
 *.mov
 *.avi
 
-# 本地部署包（Nginx/Tomcat 二进制分发，仓库只保留 README 说明）
-deploy/tomcat-cluster/nginx/
+# 本地部署包（Nginx/Tomcat 二进制分发，仓库只保留配置与 README）
+deploy/tomcat-cluster/nginx/*
+!deploy/tomcat-cluster/nginx/conf/
+deploy/tomcat-cluster/nginx/conf/*
+!deploy/tomcat-cluster/nginx/conf/nginx.conf
 deploy/tomcat-cluster/tomcat1/
 deploy/tomcat-cluster/tomcat2/
 # 分享页打包产物
