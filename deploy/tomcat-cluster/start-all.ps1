@@ -86,15 +86,21 @@ foreach ($node in $nodes) {
 }
 
 # ---------- 启动 Nginx ----------
+$nginxDir = Join-Path $base 'nginx'
+$nginxExe = Join-Path $nginxDir 'nginx.exe'
 if (Test-Port 80) {
-    Write-Host '[SKIP] Nginx 已在监听 80' -ForegroundColor Yellow
+    if (Get-Process -Name nginx -ErrorAction SilentlyContinue) {
+        Write-Host '[SKIP] Nginx 已在监听 80' -ForegroundColor Yellow
+    } else {
+        Write-Host '[WARN] 端口 80 被其他程序占用（如 Apache/IIS），Nginx 无法启动，请释放 80 后重试' -ForegroundColor Yellow
+    }
 } else {
-    $nginxDir = Join-Path $base 'nginx'
-    $nginxExe = Join-Path $nginxDir 'nginx.exe'
     if (-not (Test-Path $nginxExe)) {
         Write-Host "[ERROR] 缺少 $nginxExe" -ForegroundColor Red
         exit 1
     }
+    # Nginx Windows 包缺少 temp 目录时启动会失败，这里先补齐
+    New-Item -ItemType Directory -Force -Path (Join-Path $nginxDir 'temp') | Out-Null
     Start-Process -FilePath $nginxExe -WorkingDirectory $nginxDir -WindowStyle Hidden
     if (Wait-Port 80 10) {
         Write-Host '[OK] Nginx 监听 80' -ForegroundColor Green
