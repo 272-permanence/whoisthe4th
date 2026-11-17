@@ -61,6 +61,8 @@ function getToken(): string | null {
 function forceLogout(): void {
   localStorage.removeItem('token');
   localStorage.removeItem('user');
+  localStorage.removeItem('whoisthe4th_token');
+  localStorage.removeItem('whoisthe4th_user');
   if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
     window.location.replace(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`);
   }

@@ -160,6 +160,12 @@ const routes = [
         component: () => import('../views/admin/UserAdmin.vue'),
         meta: { title: '用户管理' },
       },
+      {
+        path: 'logs',
+        name: 'admin-logs',
+        component: () => import('../views/admin/LogCenter.vue'),
+        meta: { title: '日志中心' },
+      },
     ],
   },
 

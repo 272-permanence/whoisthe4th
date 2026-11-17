@@ -18,7 +18,7 @@ import { executeRead } from '../analytics/db.js';
 import { ErrorCodeEnum } from '../common/errorCodes.js';
 import { createLogger } from '../common/logger.js';
 import { saveErrorLog, saveOperationLog } from '../services/logService.js';
-import { requireAuth, requireRole } from './authGuard.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
 
 const log = createLogger('logs');
 const router = Router();
@@ -111,7 +111,7 @@ router.post('/error', async (req: Request, res: Response) => {
 // ============================ 日志查询（管理员） ============================
 
 // 以下查询接口都需要管理员权限
-router.use(requireAuth, requireRole(['admin']));
+router.use(requireAuth, requireRole('admin'));
 
 // ============================ 工具函数 ============================
 

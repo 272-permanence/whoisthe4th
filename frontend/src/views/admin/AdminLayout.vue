@@ -11,7 +11,8 @@ const menuItems = [
   { path: '/admin', name: 'admin-dashboard', label: '控制台', icon: '🏠' },
   { path: '/admin/content', name: 'admin-content', label: '内容管理', icon: '📝' },
   { path: '/admin/products', name: 'admin-products', label: '商品管理', icon: '🛍️' },
-  { path: '/admin/users', name: 'admin-users', label: '用户管理', icon: '👥' }
+  { path: '/admin/users', name: 'admin-users', label: '用户管理', icon: '👥' },
+  { path: '/admin/logs', name: 'admin-logs', label: '日志中心', icon: '📊' }
 ];
 
 function handleLogout() {
