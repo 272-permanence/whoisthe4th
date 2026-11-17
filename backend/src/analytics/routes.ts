@@ -9,7 +9,7 @@ import { Router, type Request, type Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
 import type Redis from 'ioredis';
-import { executeRead, executeWrite, getDb } from './db.js';
+import { executeRead, executeWrite } from './db.js';
 import { analyzeSentiment } from './sentiment.js';
 import { sseBroker } from './sse-broker.js';
 import { ErrorCodeEnum } from '../common/errorCodes.js';
@@ -131,9 +131,9 @@ async function isPushLeader(redis: Redis): Promise<boolean> {
 
 /**
  * POST /api/v1/analytics/log
- * 埋点采集：接收前端上报的交互日志，做情感分析后存入数据库
+ * 埋点采集：接收前端上报的交互日志，做情感分析后存入 MySQL
  */
-router.post('/log', (req: Request, res: Response) => {
+router.post('/log', async (req: Request, res: Response) => {
   const { userId, message, response, scenicSpot } = req.body || {};
 
   if (!userId || !message) {
@@ -144,18 +144,21 @@ router.post('/log', (req: Request, res: Response) => {
   // 情感分析
   const { score, label } = analyzeSentiment(message);
 
-  const db = getDb();
-  const stmt = db.prepare(`
-    INSERT INTO interaction_log (user_id, message, response, sentiment_score, sentiment_label, scenic_spot)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
-
-  const info = stmt.run(userId, message, response || null, score, label, scenicSpot || null);
+  // 写 MySQL interaction_log + sentiment_data
+  const insertResult = await executeWrite<{ insertId: number }>(
+    `INSERT INTO interaction_log (user_id, message, response, scenic_spot)
+     VALUES (?, ?, ?, ?)`,
+    [userId, message, response || null, scenicSpot || null]
+  );
+  await executeWrite(
+    `INSERT INTO sentiment_data (log_id, score, label, model) VALUES (?, ?, ?, ?)`,
+    [insertResult.insertId, score, label, 'lexicon-v1']
+  );
 
   res.json({
     code: 0,
     message: 'ok',
-    data: { id: info.lastInsertRowid, sentimentScore: score, sentimentLabel: label }
+    data: { id: insertResult.insertId, sentimentScore: score, sentimentLabel: label }
   });
 });
 
@@ -163,8 +166,8 @@ router.post('/log', (req: Request, res: Response) => {
  * GET /api/v1/analytics/stats
  * 获取当前统计数据（前端初次加载时调用）
  */
-router.get('/stats', (_req: Request, res: Response) => {
-  const stats = computeStats();
+router.get('/stats', async (_req: Request, res: Response) => {
+  const stats = await computeStats();
   res.json({ code: 0, message: 'ok', data: stats });
 });
 
@@ -177,59 +180,63 @@ router.get('/stream', (_req: Request, res: Response) => {
   // 客户端断开后的清理已由 sseBroker.addClient 内部的 res.on('close') 统一负责
   sseBroker.addClient(clientId, res);
 
-  // 连接后立即推送一次当前数据
-  const stats = computeStats();
-  res.write(`event: stats\ndata: ${JSON.stringify(stats)}\n\n`);
+  // 连接后立即推送一次当前数据（异步拉取，不阻塞 SSE 握手）
+  void computeStats().then(stats => {
+    res.write(`event: stats\ndata: ${JSON.stringify(stats)}\n\n`);
+  }).catch(err => {
+    log.ERROR(`stream 首推失败: ${String(err)}`);
+  });
 });
 
 /**
- * 计算统计数据
+ * 计算统计数据（统一走 MySQL 从库 executeRead）
  */
-function computeStats() {
-  const db = getDb();
-
+async function computeStats() {
   // 1. 总服务人次
-  const totalRow = db.prepare('SELECT COUNT(*) as count FROM interaction_log').get() as { count: number };
-  const totalVisits = totalRow.count;
+  const totalRow = await executeRead<{ count: number }[]>(
+    'SELECT COUNT(*) as count FROM interaction_log'
+  );
+  const totalVisits = Number(totalRow[0]?.count ?? 0);
 
   // 2. 今日服务人次
-  const todayRow = db.prepare(
-    "SELECT COUNT(*) as count FROM interaction_log WHERE date(created_at) = date('now')"
-  ).get() as { count: number };
-  const todayVisits = todayRow.count;
+  const todayRow = await executeRead<{ count: number }[]>(
+    'SELECT COUNT(*) as count FROM interaction_log WHERE DATE(created_at) = CURDATE()'
+  );
+  const todayVisits = Number(todayRow[0]?.count ?? 0);
 
-  // 3. 情感分布
-  const sentimentRows = db.prepare(
-    'SELECT sentiment_label, COUNT(*) as count FROM interaction_log GROUP BY sentiment_label'
-  ).all() as { sentiment_label: string; count: number }[];
+  // 3. 情感分布（从 sentiment_data 表查，label ENUM('positive','neutral','negative')）
+  const sentimentRows = await executeRead<{ label: string; count: number }[]>(
+    'SELECT label, COUNT(*) as count FROM sentiment_data GROUP BY label'
+  );
 
   const sentimentDist = { positive: 0, neutral: 0, negative: 0 };
   for (const row of sentimentRows) {
-    if (row.sentiment_label in sentimentDist) {
-      (sentimentDist as Record<string, number>)[row.sentiment_label] = row.count;
+    const key = row.label as keyof typeof sentimentDist;
+    if (key in sentimentDist) {
+      sentimentDist[key] = Number(row.count);
     }
   }
 
   // 4. 热门问答 TOP10
-  const hotQuestions = db.prepare(
+  const hotQuestions = await executeRead<{ message: string; count: number }[]>(
     `SELECT message, COUNT(*) as count
      FROM interaction_log
      GROUP BY message
      ORDER BY count DESC
      LIMIT 10`
-  ).all() as { message: string; count: number }[];
+  );
 
   // 5. 近 24 小时问答量趋势（按小时聚合）
-  const hourlyRows = db.prepare(
-    `SELECT strftime('%Y-%m-%d %H:00:00', created_at) as hour, COUNT(*) as count
+  const hourlyRows = await executeRead<{ hour: string; count: number }[]>(
+    `SELECT DATE_FORMAT(created_at, '%Y-%m-%d %H:00:00') as hour, COUNT(*) as count
      FROM interaction_log
-     WHERE created_at >= datetime('now', '-23 hours')
+     WHERE created_at >= DATE_SUB(NOW(), INTERVAL 23 HOUR)
      GROUP BY hour
      ORDER BY hour`
-  ).all() as { hour: string; count: number }[];
+  );
 
   // 补全 24 小时的数据点
-  const trend = build24HourTrend(hourlyRows);
+  const trend = build24HourTrend(hourlyRows.map(r => ({ hour: r.hour, count: Number(r.count) })));
 
   // ========== 失物招领统计 ==========
   // 6. 状态分布（open 待处理 / resolved 已解决 / expired 已过期）
@@ -282,7 +289,7 @@ function computeStats() {
     totalVisits,
     todayVisits,
     sentimentDist,
-    hotQuestions,
+    hotQuestions: hotQuestions.map(r => ({ message: r.message, count: Number(r.count) })),
     hourlyTrend: trend,
     lostFound: {
       total: lfTotal,

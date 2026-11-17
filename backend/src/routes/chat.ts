@@ -5,7 +5,7 @@ import { saveConversation, saveRagSources, newSessionId, ensureSession, loadSess
 import { initSseStream, sendSseEvent, startSseHeartbeat, SseEventEnum } from '../common/sse.js';
 import { createLogger } from '../common/logger.js';
 import { ErrorCodeEnum } from '../common/errorCodes.js';
-import { analyzeSentiment, SENTIMENT_MODEL } from '../analytics/sentiment.js';
+import { analyzeSentiment } from '../analytics/sentiment.js';
 import { executeWrite } from '../analytics/db.js';
 
 const router = Router();
@@ -165,7 +165,7 @@ router.post('/stream', async (req: Request, res: Response) => {
         );
         await executeWrite(
           `INSERT INTO sentiment_data (log_id, score, label, model) VALUES (?, ?, ?, ?)`,
-          [logResult.insertId, score, label, SENTIMENT_MODEL]
+          [logResult.insertId, score, label, 'lexicon-v1']
         );
         log.INFO(`大屏埋点 logId=${logResult.insertId} label=${label}`);
       }
