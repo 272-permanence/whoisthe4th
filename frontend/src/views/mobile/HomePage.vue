@@ -43,8 +43,8 @@ async function loadHome() {
 }
 
 function go(path: string) {
-  // 只允许已注册的路由跳转；其余（/poi /routes）等成员B页面落地后放开
-  const knownPaths = ['/home', '/interaction', '/lost-found', '/profile', '/admin/kb', '/qa', '/dashboard', '/routes'];
+  // 只允许已注册的路由跳转
+  const knownPaths = ['/home', '/interaction', '/lost-found', '/profile', '/admin/kb', '/qa', '/dashboard', '/routes', '/pois', '/navigate'];
   if (knownPaths.includes(path)) {
     router.push(path);
   } else {
@@ -130,7 +130,7 @@ onMounted(loadHome);
 
     <!-- 推荐路线 -->
     <van-cell-group inset class="section" v-if="recommendedRoutes.length">
-      <van-cell title="推荐路线" is-link>
+      <van-cell title="推荐路线" is-link @click="router.push('/routes')">
         <template #right-icon><span class="section-more">更多 ›</span></template>
       </van-cell>
       <van-cell
@@ -139,13 +139,13 @@ onMounted(loadHome);
         :title="r.name"
         :label="`${r.theme} · 约${r.estimated_minutes}分钟`"
         is-link
-        @click="showToast('路线详情页待成员B落地')"
+        @click="router.push(`/routes/${r.id}`)"
       />
     </van-cell-group>
 
     <!-- 热门景点 -->
     <van-cell-group inset class="section" v-if="hotPois.length">
-      <van-cell title="热门景点" is-link>
+      <van-cell title="热门景点" is-link @click="router.push('/pois')">
         <template #right-icon><span class="section-more">更多 ›</span></template>
       </van-cell>
       <van-cell
@@ -154,7 +154,7 @@ onMounted(loadHome);
         :title="poi.name"
         :label="categoryLabel(poi.category)"
         is-link
-        @click="showToast('景点详情页待成员B落地')"
+        @click="router.push('/pois')"
       />
     </van-cell-group>
   </div>

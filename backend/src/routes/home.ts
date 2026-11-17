@@ -32,7 +32,7 @@ const DEFAULT_BANNERS = [
 
 const DEFAULT_QUICK_ENTRIES = [
   { icon: 'service-o', label: 'AI 导览', path: '/interaction', color: '#1989fa' },
-  { icon: 'location-o', label: '景色推荐', path: '/poi', color: '#07c160' },
+  { icon: 'location-o', label: '景色推荐', path: '/pois', color: '#07c160' },
   { icon: 'guide-o', label: '游玩攻略', path: '/routes', color: '#ff976a' },
   { icon: 'goods-o', label: '失物招领', path: '/lost-found', color: '#7232dd' },
 ];
