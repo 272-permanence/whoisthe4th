@@ -13,6 +13,7 @@
 import { Router, type Request, type Response } from 'express';
 import { createLogger } from '../common/logger.js';
 import { executeRead, executeWrite } from '../analytics/db.js';
+import { listPois } from '../services/poiService.js';
 
 type SqlParam = string | number | boolean | Date | null;
 
@@ -54,6 +55,26 @@ router.get('/', async (req: Request, res: Response) => {
   } catch (error) {
     log.ERROR(`POI 列表异常: ${String(error)}`);
     res.status(500).json({ code: 50000, message: 'POI 列表加载失败' });
+  }
+});
+
+// ======================== GET /list 景色推荐（成员B） ========================
+
+router.get('/list', async (req: Request, res: Response) => {
+  try {
+    const category = typeof req.query.category === 'string' ? req.query.category.trim() : '';
+    const keyword = typeof req.query.keyword === 'string' ? req.query.keyword.trim() : '';
+    const limit = Number(req.query.limit);
+
+    const data = await listPois({
+      category: category || undefined,
+      keyword: keyword || undefined,
+      limit: Number.isFinite(limit) && limit > 0 ? limit : undefined,
+    });
+    res.json({ code: 0, message: 'ok', data });
+  } catch (error) {
+    log.ERROR(`POI 推荐列表异常: ${String(error)}`);
+    res.status(500).json({ code: 50000, message: '景点列表加载失败' });
   }
 });
 
