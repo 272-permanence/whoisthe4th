@@ -45,6 +45,26 @@ $base = "<仓库根目录>\deploy\tomcat-cluster"
 Start-Process "$base\nginx\nginx.exe" -WorkingDirectory "$base\nginx"
 ```
 
+## 一键启停（推荐）
+
+```powershell
+# 启动：默认读取环境变量 JAVA_HOME
+.\start-all.ps1
+
+# 指定 JDK 目录启动
+.\start-all.ps1 -JavaHome "C:\Program Files\Java\jdk-17"
+
+# 停止（先停 Nginx，再优雅关闭两个 Tomcat，必要时按端口兜底清理）
+.\stop-all.ps1
+```
+
+若提示“禁止运行脚本”，改用：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start-all.ps1
+powershell -ExecutionPolicy Bypass -File .\stop-all.ps1
+```
+
 ## 验证
 
 ```powershell
