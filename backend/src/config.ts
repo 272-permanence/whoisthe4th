@@ -1,10 +1,9 @@
 /**
  * @file 后端配置管理模块
- * @author 第八组
+ * @author 第八组（成员A）
  * @date 2026-10-15
  * @description 统一从环境变量读取服务配置（端口、ASR/TTS 提供方、超时时间等）。
  *              业务代码禁止硬编码端口、URL、超时时间等魔法值。
- *              MySQL 读写分离（成员D 牵头）+ JWT（成员C）+ 高德（成员B）三段配置共存。
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,9 +12,10 @@ import { KB_EMBEDDING_DIMENSION } from './constants/kbConstants.js';
 
 dotenv.config();
 
+/** 后端工程根目录（src/ 与编译产物 dist/ 都只比根目录深一层） */
 const BACKEND_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-// ---------- 默认值 ----------
+// ---------- 默认值：所有魔法值在此统一声明 ----------
 const DEFAULT_PORT = 8000;
 const DEFAULT_FRONTEND_URL = 'http://localhost:5173';
 const DEFAULT_UPLOAD_MAX_BYTES = 20 * 1024 * 1024;
@@ -30,156 +30,169 @@ const DEFAULT_TTS_VOLUME = '+0%';
 const DEFAULT_TTS_PITCH = '+0Hz';
 const DEFAULT_TTS_MOCK_SAMPLE_RATE = 24_000;
 const DEFAULT_DASHSCOPE_MODEL = 'qwen-plus';
+/** DashScope OpenAI 兼容端点（中国区） */
 const DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
+/** 知识库默认向量模型（需与成员B 的 RAG 链路保持一致） */
 const DEFAULT_EMBEDDING_MODEL = 'bge-m3';
-const DEFAULT_DB_MASTER_PORT = 3307;
-const DEFAULT_DB_SLAVE_PORT = 3307;
-/** Redis 消息队列默认地址（Memurai / Redis 7 兼容） */
-const DEFAULT_REDIS_URL = 'redis://127.0.0.1:6379';
 
+/** ASR 提供方：mock 离线桩 / whisper-api 远程接口 / whisper-cli 本地 Whisper 可执行程序 */
 export type AsrProvider = 'mock' | 'whisper-api' | 'whisper-cli';
+
+/** TTS 提供方：edge 微软 Edge 在线合成（Python edge-tts）/ mock 离线合成（无网络演示用） */
 export type TtsProvider = 'edge' | 'mock';
 
+/**
+ * 读取字符串型环境变量
+ * @param name 环境变量名
+ * @param fallback 未配置时的默认值
+ * @returns 环境变量值或默认值
+ */
 function readText(name: string, fallback: string): string {
-  const v = process.env[name];
-  return v === undefined || v.trim() === '' ? fallback : v.trim();
+  const value = process.env[name];
+  return value === undefined || value.trim() === '' ? fallback : value.trim();
 }
+
+/**
+ * 读取整数型环境变量
+ * @param name 环境变量名
+ * @param fallback 未配置或非法时的默认值
+ * @returns 解析后的整数
+ */
 function readInt(name: string, fallback: number): number {
-  const p = Number.parseInt(readText(name, String(fallback)), 10);
-  return Number.isFinite(p) ? p : fallback;
+  const parsed = Number.parseInt(readText(name, String(fallback)), 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 export const config = {
   port: readInt('PORT', DEFAULT_PORT),
   frontendUrl: readText('FRONTEND_URL', DEFAULT_FRONTEND_URL),
+  /** 单次音频上传的体积上限（字节） */
   uploadMaxBytes: readInt('UPLOAD_MAX_BYTES', DEFAULT_UPLOAD_MAX_BYTES),
 
-  // DashScope（成员B：流式问答）
+  // DashScope 配置（OpenAI 兼容模式），供成员B 的流式问答接口使用
   dashscope: {
     apiKey: readText('DASHSCOPE_API_KEY', ''),
     model: readText('DASHSCOPE_MODEL', DEFAULT_DASHSCOPE_MODEL),
     baseUrl: DASHSCOPE_BASE_URL
   },
 
-  // 高德地图（成员B：导航页）
-  amap: {
-    jsKey: readText('AMAP_JS_KEY', ''),
-    jsSecurityCode: readText('AMAP_JS_SECURITY_CODE', ''),
-    webServiceKey: readText('AMAP_WEB_SERVICE_KEY', ''),
-    directionWalkingUrl: 'https://restapi.amap.com/v3/direction/walking',
-    directionDrivingUrl: 'https://restapi.amap.com/v3/direction/driving',
-    directionDrivingAvoidUrl: 'https://restapi.amap.com/v3/direction/driving?extensions=all&strategy=10'
-  },
-
   asr: {
     provider: readText('ASR_PROVIDER', 'mock') as AsrProvider,
     language: readText('ASR_LANGUAGE', DEFAULT_ASR_LANGUAGE),
     timeoutMs: readInt('ASR_TIMEOUT_MS', DEFAULT_ASR_TIMEOUT_MS),
+    /** OpenAI 兼容的语音识别接口地址，如硅基流动、阿里云百炼的 /v1 均可复用 */
     whisperApiUrl: readText('WHISPER_API_URL', DEFAULT_WHISPER_API_URL),
     whisperApiKey: readText('WHISPER_API_KEY', ''),
     whisperModel: readText('WHISPER_MODEL', DEFAULT_WHISPER_MODEL),
+    /** mock 提供方返回的固定文本（离线演示用） */
     mockText: readText('ASR_MOCK_TEXT', DEFAULT_ASR_MOCK_TEXT),
+    /** whisper-cli 提供方：可执行程序，如 python 或 whisper-cli（whisper.cpp） */
     cliBin: readText('ASR_CLI_BIN', 'python'),
-    cliArgs: readText('ASR_CLI_ARGS', `${path.join(BACKEND_ROOT, 'scripts', 'whisper_transcribe.py')} --audio {audio} --model small`)
+    /** whisper-cli 提供方：参数模板，{audio} 会被替换为临时 WAV 文件路径 */
+    cliArgs: readText(
+      'ASR_CLI_ARGS',
+      `${path.join(BACKEND_ROOT, 'scripts', 'whisper_transcribe.py')} --audio {audio} --model small`
+    )
   },
 
   tts: {
     provider: readText('TTS_PROVIDER', 'edge') as TtsProvider,
+    /** 具备 edge-tts 依赖的 Python 解释器路径 */
     python: readText('TTS_PYTHON', 'python'),
+    /** 流式合成脚本路径 */
     edgeScript: readText('TTS_EDGE_SCRIPT', path.join(BACKEND_ROOT, 'scripts', 'edge_tts_stream.py')),
     voice: readText('TTS_VOICE', DEFAULT_TTS_VOICE),
     rate: readText('TTS_RATE', DEFAULT_TTS_RATE),
     volume: readText('TTS_VOLUME', DEFAULT_TTS_VOLUME),
     pitch: readText('TTS_PITCH', DEFAULT_TTS_PITCH),
+    /** mock 提供方生成的音频采样率 */
     mockSampleRate: readInt('TTS_MOCK_SAMPLE_RATE', DEFAULT_TTS_MOCK_SAMPLE_RATE)
   },
 
-  // 知识库（成员C）
+  // 知识库（成员C）：向量库与向量化服务配置
+  /** Qdrant 服务地址，留空则使用进程内内存向量库 */
   qdrantUrl: readText('QDRANT_URL', ''),
+  /** 向量服务地址（OpenAI 兼容接口），留空则使用本地确定性伪向量 */
   embeddingApiUrl: readText('EMBEDDING_API_URL', ''),
+  /** 向量服务访问凭证 */
   embeddingApiKey: readText('EMBEDDING_API_KEY', ''),
+  /** 向量模型名，需与成员B 的 RAG 链路保持一致 */
   embeddingModel: readText('EMBEDDING_MODEL', DEFAULT_EMBEDDING_MODEL),
+  /** 向量维度，需与成员B 的 RAG 链路保持一致 */
   embeddingDimension: readInt('EMBEDDING_DIMENSION', KB_EMBEDDING_DIMENSION),
 
-  // JWT 认证（成员C）
+  // MySQL 物理数据库（任务3）
+  mysql: {
+    host: readText('DB_HOST', 'localhost-unconfigured'),
+    port: readInt('DB_PORT', 3306),
+    user: readText('DB_USER', 'root'),
+    password: readText('DB_PASSWORD', ''),
+    database: readText('DB_NAME', 'scenic_ai')
+  },
+
+  // JWT 认证配置（成员C）
   jwt: {
     secret: readText('JWT_SECRET', 'scenic-ai-dev-secret-change-in-production-2026'),
     expiresIn: readText('JWT_EXPIRES_IN', '7d')
   },
 
-  // ============ 统一身份认证 6 通道（成员C） ============
+  // 统一身份认证（成员C）：默认全部为 mock 演示模式，无需外部资质
   unified: {
     email: {
+      /** mock：不真正发信，验证码直接返回前端演示；smtp：接入真实邮件服务 */
       provider: readText('EMAIL_PROVIDER', 'mock') as 'mock' | 'smtp',
-      codeTtlSec: readInt('EMAIL_CODE_TTL', 300),
-      cooldownSec: readInt('EMAIL_CODE_COOLDOWN', 60),
-      exposeCode: readText('EMAIL_EXPOSE_CODE', 'true') === 'true',
       smtpHost: readText('SMTP_HOST', 'smtp.qq.com'),
       smtpPort: readInt('SMTP_PORT', 465),
-      smtpSecure: readText('SMTP_SECURE', 'true') === 'true',
+      /** 465 端口走 SSL 直连，587 端口需关闭（STARTTLS） */
+      smtpSecure: readText('SMTP_SECURE', 'true') !== 'false',
       smtpUser: readText('SMTP_USER', ''),
+      /** QQ / 163 等邮箱填「授权码」，不是登录密码 */
       smtpPass: readText('SMTP_PASS', ''),
-      smtpFrom: readText('SMTP_FROM', '')
+      from: readText('SMTP_FROM', 'noreply@scenic-ai.local'),
+      /** 验证码有效期 / 重发冷却（秒） */
+      codeTtlSec: readInt('EMAIL_CODE_TTL', 300),
+      cooldownSec: readInt('EMAIL_CODE_COOLDOWN', 60),
+      /** mock 模式下是否把验证码回传给前端（仅演示环境开启） */
+      exposeCode: readText('EMAIL_EXPOSE_CODE', 'true') === 'true'
     },
     phone: {
+      /** mock：验证码直接返回前端演示；sms：接入阿里云 SMS 真实发信 */
       provider: readText('PHONE_PROVIDER', 'mock') as 'mock' | 'sms',
+      /** 验证码有效期（秒） */
       codeTtlSec: readInt('PHONE_CODE_TTL', 300),
+      /** 发送冷却时间（秒） */
       cooldownSec: readInt('PHONE_CODE_COOLDOWN', 60),
+      /** mock 模式下是否把验证码回传给前端 */
       exposeCode: readText('PHONE_EXPOSE_CODE', 'true') === 'true',
-      // 阿里云 SMS（provider=sms 时必填）
+      // ---------- 阿里云 SMS（provider=sms 时必填）----------
+      /** RAM 子账号 AccessKey ID（推荐使用子账号并仅授予 dysms 权限） */
       accessKeyId: readText('ALIYUN_SMS_ACCESS_KEY_ID', ''),
+      /** RAM 子账号 AccessKey Secret */
       accessKeySecret: readText('ALIYUN_SMS_ACCESS_KEY_SECRET', ''),
+      /** 短信签名（阿里云短信控制台申请后获得，如「景区AI」） */
       signName: readText('ALIYUN_SMS_SIGN_NAME', ''),
+      /** 短信模板 Code（阿里云控制台模板详情页获取，如 SMS_123456789） */
       templateCode: readText('ALIYUN_SMS_TEMPLATE_CODE', '')
     },
     wechat: {
-      mode: readText('WECHAT_MODE', 'mock') as 'mock' | 'real',
-      mockQrExpireSec: 120
+      /** 微信开放平台网站应用（扫码登录）资质 */
+      appId: readText('WECHAT_APP_ID', ''),
+      appSecret: readText('WECHAT_APP_SECRET', ''),
+      /** mock：二维码为本地模拟，无需真实 AppID */
+      mock: readText('WECHAT_MODE', 'mock') !== 'real',
+      /** 二维码有效期（秒） */
+      qrTtlSec: readInt('WECHAT_QR_TTL', 120)
     },
     sso: {
+      /** mock：本地点一下即返回票据；real：对接学校统一认证平台 */
       mode: readText('SSO_MODE', 'mock') as 'mock' | 'real',
       endpoint: readText('SSO_ENDPOINT', ''),
-      clientId: readText('SSO_CLIENT_ID', ''),
-      // mock 固定学号（保证多次演示到同一账号）
-      mockUid: readText('SSO_MOCK_UID', 'sso_20260001')
+      clientId: readText('SSO_CLIENT_ID', '')
     },
     cert: {
+      /** mock：仅校验证书文件可读 + 计算指纹；ca：对接真实 CA 证书验签 */
       mode: readText('CERT_MODE', 'mock') as 'mock' | 'ca',
-      maxFileBytes: 2 * 1024 * 1024
+      caCertPath: readText('CA_CERT_PATH', '')
     }
-  },
-
-  // MySQL 读写分离（成员D 牵头，全组复用）
-  db: {
-    database: readText('DB_NAME', 'scenic_ai'),
-    user: readText('DB_USER', 'root'),
-    password: readText('DB_PASSWORD', ''),
-    master: {
-      host: readText('DB_MASTER_HOST', '127.0.0.1'),
-      port: readInt('DB_MASTER_PORT', DEFAULT_DB_MASTER_PORT)
-    },
-    slave: {
-      host: readText('DB_SLAVE_HOST', '127.0.0.1'),
-      port: readInt('DB_SLAVE_PORT', DEFAULT_DB_SLAVE_PORT)
-    }
-  },
-
-  /**
-   * Redis 消息队列（成员D · 数据洞察模块牵头）
-   * - 日志：业务侧 XADD 到 Stream，独立消费者组批量落 MySQL
-   * - 大屏：统计结果走 Pub/Sub 广播到各节点，解决 Tomcat 多节点 SSE 无法互通的问题
-   * REDIS_ENABLED=false 或 Redis 连不上时自动降级：日志直写 MySQL、大屏仅本机推送
-   */
-  redis: {
-    enabled: readText('REDIS_ENABLED', 'true') !== 'false',
-    url: readText('REDIS_URL', DEFAULT_REDIS_URL),
-    /** 日志消息的 Stream 键名 */
-    logStream: readText('REDIS_LOG_STREAM', 'scenic:log:stream'),
-    /** 日志消费者组名 */
-    logGroup: readText('REDIS_LOG_GROUP', 'log-writer'),
-    /** 大屏统计的 Pub/Sub 频道名 */
-    statsChannel: readText('REDIS_STATS_CHANNEL', 'scenic:stats'),
-    /** 大屏定时推送的分布式锁键名（只让一个节点算统计并发布） */
-    statsLockKey: readText('REDIS_STATS_LOCK_KEY', 'scenic:stats:pusher')
   }
 } as const;

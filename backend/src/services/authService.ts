@@ -1,7 +1,8 @@
 ﻿/**
- * @file 认证服务：JWT 签发/校验 + bcryptjs 密码哈希 + 用户管理
+ * @file 认证服务：JWT 签发/校验 + bcryptjs 密码哈希 + 用户管理 + 账号锁定
  * @author 第八组（成员C）
- * @date 2026-11-03
+ * @date 2026-11-18
+ * @change 新增账号锁定：连续 5 次密码错误 → 锁 15 分钟；登录成功自动清除
  */
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
@@ -65,13 +66,95 @@ export function verifyToken(token: string): JwtPayload {
   return (jwt.verify as any)(token, config.jwt.secret) as JwtPayload;
 }
 
-export function login(username: string, password: string): { user: SafeUser; token: string } | { error: string } {
+// ========================== 账号锁定（内存 Map + 定时清理） ==========================
+
+interface LockState {
+  fails: number;
+  lockedUntil: number;
+  lastIp: string;
+}
+
+/** key = username（密码通道）或 external_key（外部通道），进程内存，重启即清空 */
+const lockMap = new Map<string, LockState>();
+
+/** 账号锁定阈值：连续 5 次密码错误 → 锁 15 分钟 */
+export const LOCK_MAX_FAILS = 5;
+export const LOCK_DURATION_MS = 15 * 60 * 1000;
+
+/**
+ * 清理过期锁定记录：避免 Map 无限增长。
+ * 1 分钟跑一次，只清已过期的。
+ */
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of lockMap) {
+    if (v.lockedUntil > 0 && v.lockedUntil <= now) lockMap.delete(k);
+  }
+}, 60 * 1000).unref();
+
+/** 检查账号是否被锁，返回剩余毫秒（0 = 未锁或已过期） */
+export function isAccountLocked(username: string): number {
+  const state = lockMap.get(username);
+  if (!state) return 0;
+  if (state.lockedUntil > Date.now()) {
+    return state.lockedUntil - Date.now();
+  }
+  // 锁已过期 → 清除
+  lockMap.delete(username);
+  return 0;
+}
+
+/** 记录一次登录失败：密码错误 / 验证码错误 / ticket 无效都算 */
+export function recordLoginFail(username: string, ip: string): number {
+  const state = lockMap.get(username) ?? { fails: 0, lockedUntil: 0, lastIp: ip };
+  state.fails += 1;
+  state.lastIp = ip;
+  if (state.fails >= LOCK_MAX_FAILS) {
+    state.lockedUntil = Date.now() + LOCK_DURATION_MS;
+  }
+  lockMap.set(username, state);
+  return state.lockedUntil > Date.now() ? state.lockedUntil - Date.now() : 0;
+}
+
+/** 记录登录成功：清除该账号所有失败记录 */
+export function recordLoginSuccess(username: string): void {
+  lockMap.delete(username);
+}
+
+/** 调试：导出当前所有锁定状态 */
+export function getLockSnapshot(): Array<{ username: string; fails: number; remainingSec: number; lastIp: string }> {
+  const now = Date.now();
+  const out: Array<{ username: string; fails: number; remainingSec: number; lastIp: string }> = [];
+  for (const [username, s] of lockMap) {
+    out.push({
+      username,
+      fails: s.fails,
+      remainingSec: s.lockedUntil > now ? Math.ceil((s.lockedUntil - now) / 1000) : 0,
+      lastIp: s.lastIp,
+    });
+  }
+  return out;
+}
+
+// ========================== 登录 / 注册 ==========================
+
+export function login(username: string, password: string): { user: SafeUser; token: string } | { error: string; lockedMs?: number } {
+  // 1. 账号锁定检查（锁了直接拒绝，不查密码）
+  const lockedMs = isAccountLocked(username);
+  if (lockedMs > 0) {
+    return { error: 'ACCOUNT_LOCKED', lockedMs };
+  }
+
   const db = getAuthDb();
   const user = db.prepare('SELECT * FROM admin_user WHERE username = ?').get(username) as UserRecord | undefined;
   if (!user) return { error: 'BAD_CREDENTIALS' };
   if (user.status === 'disabled') return { error: 'USER_DISABLED' };
+
   const ok = bcrypt.compareSync(password, user.password_hash);
   if (!ok) return { error: 'BAD_CREDENTIALS' };
+
+  // 登录成功 → 清除失败记录
+  recordLoginSuccess(username);
 
   const safe = toSafeUser(user);
   const token = signToken({ uid: user.id, username: user.username, role: user.role });
