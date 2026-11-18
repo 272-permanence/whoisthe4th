@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 /**
  * @file 日志中心（管理员）
  * @description 覆盖日志分享的全部能力：概览、操作/错误/登录日志查询、审计、
@@ -334,7 +334,7 @@ function renderHotChart() {
     series: [{
       type: 'bar',
       data: hotPois.value.map((p) => p.visitCount),
-      itemStyle: { color: '#2f7d6d', borderRadius: [0, 4, 4, 0] },
+      itemStyle: { color: '#526F61', borderRadius: [0, 4, 4, 0] },
       barMaxWidth: 22,
       label: { show: true, position: 'right' },
     }],
@@ -857,7 +857,7 @@ onBeforeUnmount(() => {
 }
 .tab:hover { background: var(--color-bg, #f3f4f6); color: var(--color-text, #1f2937); }
 .tab.active {
-  background: var(--color-primary, #2f7d6d);
+  background: #526F61;
   color: #fff;
 }
 
@@ -907,7 +907,7 @@ onBeforeUnmount(() => {
   padding: 6px 14px;
   border: none;
   border-radius: 6px;
-  background: var(--color-primary, #2f7d6d);
+  background: #526F61;
   color: #fff;
   cursor: pointer;
   font-size: 13px;
@@ -1037,3 +1037,4 @@ tbody tr:hover { background: #fafafa; }
   margin: 0 0 12px;
 }
 </style>
+

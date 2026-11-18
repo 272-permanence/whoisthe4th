@@ -161,6 +161,12 @@ const routes = [
         meta: { title: '用户管理' },
       },
       {
+        path: 'data-board',
+        name: 'admin-data-board',
+        component: () => import('../views/Dashboard.vue'),
+        meta: { title: '数据看板' },
+      },
+      {
         path: 'logs',
         name: 'admin-logs',
         component: () => import('../views/admin/LogCenter.vue'),

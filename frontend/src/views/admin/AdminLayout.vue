@@ -8,16 +8,21 @@ const route = useRoute();
 const user = computed(() => getCachedUser());
 
 const menuItems = [
-  { path: '/admin', name: 'admin-dashboard', label: '控制台', icon: '🏠' },
-  { path: '/admin/content', name: 'admin-content', label: '内容管理', icon: '📝' },
-  { path: '/admin/products', name: 'admin-products', label: '商品管理', icon: '🛍️' },
-  { path: '/admin/users', name: 'admin-users', label: '用户管理', icon: '👥' },
-  { path: '/admin/logs', name: 'admin-logs', label: '日志中心', icon: '📊' }
+  { path: '/admin', name: 'admin-dashboard', label: '控制台' },
+  { path: '/admin/data-board', name: 'admin-data-board', label: '数据看板' },
+  { path: '/admin/logs', name: 'admin-logs', label: '日志中心' },
+  { path: '/admin/content', name: 'admin-content', label: '内容管理' },
+  { path: '/admin/products', name: 'admin-products', label: '商品管理' },
+  { path: '/admin/users', name: 'admin-users', label: '用户管理' }
 ];
 
 function handleLogout() {
   logout();
   router.replace('/login');
+}
+
+function goBack() {
+  router.push('/profile');
 }
 </script>
 
@@ -25,8 +30,7 @@ function handleLogout() {
   <div class="admin-layout">
     <aside class="sidebar">
       <div class="sidebar-header">
-        <span class="logo">🎫</span>
-        <span class="app-name">导览管理后台</span>
+        <span class="logo">管理后台</span>
       </div>
       <nav class="menu">
         <router-link
@@ -36,7 +40,6 @@ function handleLogout() {
           class="menu-item"
           :class="{ active: route.path === item.path || (item.path !== '/admin' && route.path.startsWith(item.path)) }"
         >
-          <span class="icon">{{ item.icon }}</span>
           <span class="label">{{ item.label }}</span>
         </router-link>
       </nav>
@@ -47,7 +50,8 @@ function handleLogout() {
         <span class="current">{{ route.meta.title || '' }}</span>
         <div class="user-area">
           <span>{{ user?.username }}（{{ user?.role }}）</span>
-          <button @click="handleLogout">退出登录</button>
+          <button class="ghost-btn" @click="goBack">返回我的</button>
+          <button class="danger-btn" @click="handleLogout">退出登录</button>
         </div>
       </header>
       <div class="content-area">
@@ -58,95 +62,94 @@ function handleLogout() {
 </template>
 
 <style scoped>
-/* 外壳：浅色青绿主题，颜色全部取自 tokens.css */
 .admin-layout {
   display: flex;
   min-height: 100vh;
-  background: var(--color-bg);
-  font-family: var(--font-sans);
-  color: var(--color-text);
+  background: #F7F6F2;
+  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #303A35;
 }
 .sidebar {
   width: 220px;
-  background: var(--color-surface);
-  border-right: 1px solid var(--color-border);
+  background: #FFFFFF;
+  border-right: 1px solid #E8E8E2;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
 }
 .sidebar-header {
-  padding: var(--space-4);
-  border-bottom: 1px solid var(--color-border);
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid #E8E8E2;
 }
-.sidebar-header .logo { font-size: 20px; }
-.sidebar-header .app-name {
-  font-family: var(--font-serif);
+.sidebar-header .logo {
+  font-size: 15px;
   font-weight: 600;
-  color: var(--color-text);
-  font-size: var(--text-body);
-  letter-spacing: 0.02em;
+  color: #303A35;
+  letter-spacing: 0.03em;
 }
-.menu { padding: var(--space-2) 0; flex: 1; }
+.menu { padding: 8px 0; flex: 1; }
 .menu-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin: var(--space-1) var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  color: var(--color-text-2);
+  display: block;
+  margin: 2px 10px;
+  padding: 9px 14px;
+  color: #7B827D;
   text-decoration: none;
-  font-size: var(--text-body);
-  border-radius: var(--radius-sm);
+  font-size: 14px;
+  border-radius: 6px;
   transition: background 0.15s, color 0.15s;
 }
-.menu-item:hover { background: var(--color-bg); color: var(--color-text); }
+.menu-item:hover { background: #F1F2EE; color: #303A35; }
 .menu-item.active {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: #E9EFEA;
+  color: #526F61;
   font-weight: 500;
 }
-.menu-item .icon { font-size: 16px; }
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .topbar {
-  height: 52px;
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
+  height: 60px;
+  background: #FFFFFF;
+  border-bottom: 1px solid #E8E8E2;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 var(--space-6);
+  padding: 0 28px;
 }
-.topbar .current { font-size: var(--text-body); font-weight: 600; color: var(--color-text); }
+.topbar .current { font-size: 16px; font-weight: 600; color: #303A35; }
 .user-area {
   display: flex;
-  gap: var(--space-4);
+  gap: 12px;
   align-items: center;
-  font-size: var(--text-caption);
-  color: var(--color-text-2);
+  font-size: 13px;
+  color: #7B827D;
 }
 .user-area button {
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  border-radius: var(--radius-sm);
+  padding: 5px 14px;
+  border-radius: 6px;
   cursor: pointer;
-  font-size: var(--text-caption);
-  color: var(--color-text);
-  transition: background 0.15s;
+  font-size: 13px;
+  transition: all 0.15s;
+  height: 32px;
 }
-.user-area button:hover { background: var(--color-bg); }
-.content-area { flex: 1; padding: var(--space-6); overflow-y: auto; }
+.user-area .ghost-btn {
+  border: 1px solid #E8E8E2;
+  background: #FFFFFF;
+  color: #526F61;
+}
+.user-area .ghost-btn:hover { background: #E9EFEA; border-color: #D0D7D1; }
+.user-area .danger-btn {
+  border: 1px solid #E8E8E2;
+  background: #FFFFFF;
+  color: #7B827D;
+}
+.user-area .danger-btn:hover { background: #F1F2EE; color: #C45F55; }
+.content-area { flex: 1; padding: 24px; overflow-y: auto; }
 
-/* 移动端：侧边栏收起为顶部横条 */
 @media (max-width: 768px) {
   .admin-layout { flex-direction: column; }
-  .sidebar { width: 100%; flex-direction: row; align-items: center; }
-  .sidebar-header { border-bottom: none; border-right: 1px solid var(--color-border); }
-  .menu { display: flex; padding: 0 var(--space-2); }
-  .menu-item { margin: 0; }
-  .menu-item.active { border-radius: 0; border-bottom: 2px solid var(--color-primary); }
+  .sidebar { width: 100%; flex-direction: row; align-items: center; height: auto; }
+  .sidebar-header { border-bottom: none; border-right: 1px solid #E8E8E2; padding: 14px 16px; }
+  .menu { display: flex; padding: 0 8px; overflow-x: auto; }
+  .menu-item { margin: 0 4px; white-space: nowrap; }
+  .menu-item.active { border-radius: 6px; }
 }
 </style>

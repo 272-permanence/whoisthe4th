@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { listAdminUsers, createAdminUser, updateAdminUser, resetAdminUserPassword, type AdminUser } from '../../api/content';
 
@@ -142,7 +142,7 @@ onMounted(loadList);
 .user-admin h1 { margin: 0 0 16px; font-size: 20px; color: #333; }
 .toolbar { display: flex; gap: 10px; margin-bottom: 12px; }
 .toolbar button { padding: 7px 16px; border: 1px solid #ddd; background: #fff; border-radius: 4px; cursor: pointer; }
-.toolbar .primary { background: #667eea; color: #fff; border-color: #667eea; }
+.toolbar .primary { background: #526F61; color: #fff; border-color: #526F61; }
 .error { background: #fff0f0; color: #d33; padding: 8px 12px; border-radius: 4px; font-size: 13px; margin: 8px 0; }
 .user-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 6px; overflow: hidden; }
 .user-table th, .user-table td { padding: 11px 14px; text-align: left; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
@@ -162,5 +162,6 @@ onMounted(loadList);
 .modal input, .modal select { width: 100%; padding: 8px 10px; margin-top: 4px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; box-sizing: border-box; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 .modal-actions button { padding: 8px 18px; border: 1px solid #ddd; background: #fff; border-radius: 5px; cursor: pointer; }
-.modal-actions .primary { background: #667eea; color: #fff; border-color: #667eea; }
+.modal-actions .primary { background: #526F61; color: #fff; border-color: #526F61; }
 </style>
+

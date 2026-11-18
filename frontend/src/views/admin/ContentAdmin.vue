@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 /**
  * @file 内容管理后台（成员C · 代搭，合并成员D 的 POI/路线 CRUD）
  * @description
@@ -447,7 +447,7 @@ onMounted(async () => {
   padding: 12px 24px; background: none; border: none; cursor: pointer;
   font-size: 15px; color: #888; border-bottom: 2px solid transparent; margin-bottom: -2px;
 }
-.top-tabs button.active { color: #667eea; border-bottom-color: #667eea; font-weight: 600; }
+.top-tabs button.active { color: #526F61; border-bottom-color: #526F61; font-weight: 600; }
 
 /* ========== C 的子 tab ========== */
 .sub-tabs { display: flex; gap: 4px; border-bottom: 1px solid #eee; margin-bottom: 16px; flex-wrap: wrap; }
@@ -455,12 +455,12 @@ onMounted(async () => {
   padding: 8px 16px; background: none; border: none; cursor: pointer;
   font-size: 13px; color: #888; border-bottom: 2px solid transparent; margin-bottom: -1px;
 }
-.sub-tabs button.active { color: #667eea; border-bottom-color: #667eea; font-weight: 500; }
+.sub-tabs button.active { color: #526F61; border-bottom-color: #526F61; font-weight: 500; }
 
 /* ========== 通用 ========== */
 .toolbar { display: flex; gap: 10px; margin-bottom: 12px; align-items: center; }
 .toolbar button { padding: 7px 16px; border: 1px solid #ddd; background: #fff; border-radius: 4px; cursor: pointer; }
-.toolbar .primary { background: #667eea; color: #fff; border-color: #667eea; }
+.toolbar .primary { background: #526F61; color: #fff; border-color: #526F61; }
 .toolbar .check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #666; cursor: pointer; }
 .error { background: #fff0f0; color: #d33; padding: 8px 12px; border-radius: 4px; font-size: 13px; margin: 8px 0; }
 .content-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 6px; overflow: hidden; }
@@ -488,13 +488,13 @@ onMounted(async () => {
 .modal .check input { width: auto; margin-top: 0; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 .modal-actions button { padding: 8px 18px; border: 1px solid #ddd; background: #fff; border-radius: 5px; cursor: pointer; }
-.modal-actions .primary { background: #667eea; color: #fff; border-color: #667eea; }
+.modal-actions .primary { background: #526F61; color: #fff; border-color: #526F61; }
 
 /* ========== 图片上传（C 新增）========== */
 .image-field { display: flex; gap: 8px; margin-top: 4px; }
 .image-field input { flex: 1; margin-top: 0; }
-.upload-btn { padding: 0 14px; border: 1px solid #667eea; background: #fff; color: #667eea; border-radius: 5px; cursor: pointer; white-space: nowrap; }
-.upload-btn:hover:not(:disabled) { background: #667eea; color: #fff; }
+.upload-btn { padding: 0 14px; border: 1px solid #526F61; background: #fff; color: #526F61; border-radius: 5px; cursor: pointer; white-space: nowrap; }
+.upload-btn:hover:not(:disabled) { background: #526F61; color: #fff; }
 .upload-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .image-preview { margin: -6px 0 12px; display: flex; align-items: center; gap: 10px; }
 .image-preview img { max-width: 200px; max-height: 100px; border-radius: 6px; border: 1px solid #eee; object-fit: cover; }
@@ -503,3 +503,4 @@ onMounted(async () => {
 
 .poi-section .list-wrap { padding-top: 8px; }
 </style>
+
