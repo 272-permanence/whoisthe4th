@@ -11,12 +11,31 @@ import { config } from '../config.js';
 export type UserRole = 'admin' | 'user';
 export type UserStatus = 'active' | 'disabled';
 
+/** 统一身份认证 — 外部通道类型 */
+export type ExternalProvider = 'email' | 'phone' | 'wechat' | 'sso' | 'cert';
+
+/** 外部通道 -> admin_user 表中对应的列名 */
+export const EXTERNAL_COLUMN: Record<ExternalProvider, string> = {
+  email: 'email',
+  phone: 'phone',
+  wechat: 'wechat_openid',
+  sso: 'sso_uid',
+  cert: 'cert_fingerprint'
+};
+
+/** 外部通道生成的默认用户名前缀（保证可读 + 唯一） */
+export function buildExternalUsername(provider: ExternalProvider, identifier: string): string {
+  const cleaned = identifier.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 20);
+  return `${provider}_${cleaned}`;
+}
+
 export interface JwtPayload {
   uid: number;
   username: string;
   role: UserRole;
 }
 
+/** 外部身份绑定的列也暴露出来（供统一认证路由使用） */
 export interface UserRecord {
   id: number;
   username: string;
@@ -24,11 +43,17 @@ export interface UserRecord {
   role: UserRole;
   nickname: string | null;
   status: UserStatus;
+  email: string | null;
+  phone: string | null;
+  wechat_openid: string | null;
+  sso_uid: string | null;
+  cert_fingerprint: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export type SafeUser = Omit<UserRecord, 'password_hash'>;
+/** SafeUser 排除所有敏感字段：password_hash + 外部身份绑定列（避免泄露） */
+export type SafeUser = Omit<UserRecord, 'password_hash' | 'wechat_openid' | 'sso_uid' | 'cert_fingerprint'>;
 
 export function signToken(payload: JwtPayload): string {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -127,4 +152,61 @@ export function resetUserPassword(uid: number, newPassword: string): boolean {
     .prepare('UPDATE admin_user SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
     .run(hash, uid);
   return result.changes > 0;
+}
+
+// ========================== 统一认证：外部通道登录 ==========================
+
+/**
+ * 外部通道统一登录入口（邮箱验证码 / 手机号验证码 / 微信扫码 / SSO / 证书）
+ * - identifier 不存在 → 自动建号，password_hash 存空串（和密码通道物理隔离）
+ * - identifier 已存在 → 直接返回 + 签发 JWT
+ */
+export function loginByExternal(
+  provider: ExternalProvider,
+  identifier: string,
+  nickname?: string
+): { user: SafeUser; token: string } | { error: string } {
+  const db = getAuthDb();
+  const column = EXTERNAL_COLUMN[provider];
+
+  // 已存在该外部身份 → 直接登录
+  const existing = db
+    .prepare(`SELECT * FROM admin_user WHERE ${column} = ?`)
+    .get(identifier) as UserRecord | undefined;
+
+  if (existing) {
+    if (existing.status === 'disabled') return { error: 'USER_DISABLED' };
+    const safe = toSafeUser(existing);
+    const token = signToken({ uid: existing.id, username: existing.username, role: existing.role });
+    return { user: safe, token };
+  }
+
+  // 新用户 → 自动建号，password_hash 存空串（外部账号无法通过密码登录）
+  const username = buildExternalUsername(provider, identifier);
+  const userNick = nickname ?? `${provider === 'sso' ? '统一认证' : provider === 'phone' ? '手机' : provider === 'email' ? '邮箱' : '第三方'}用户`;
+  const bindCol = column;
+
+  try {
+    const result = db
+      .prepare(
+        `INSERT INTO admin_user (username, password_hash, role, nickname, ${bindCol}) VALUES (?, '', 'user', ?, ?)`
+      )
+      .run(username, userNick, identifier);
+
+    const uid = Number(result.lastInsertRowid);
+    const safe = getUserById(uid)!;
+    const token = signToken({ uid, username: safe.username, role: safe.role });
+    return { user: safe, token };
+  } catch (err) {
+    // UNIQUE 冲突 → 并发建号时另一个请求先建了，直接去查
+    if (String(err).includes('UNIQUE')) {
+      const race = db.prepare(`SELECT * FROM admin_user WHERE ${column} = ?`).get(identifier) as UserRecord | undefined;
+      if (race) {
+        const safe = toSafeUser(race);
+        const token = signToken({ uid: race.id, username: race.username, role: race.role });
+        return { user: safe, token };
+      }
+    }
+    return { error: 'CREATE_FAILED' };
+  }
 }

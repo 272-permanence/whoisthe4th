@@ -23,6 +23,12 @@ export const ErrorCodeEnum = {
   USERNAME_EXISTS: 40901,
   /** 用户名或密码错误 */
   BAD_CREDENTIALS: 40102,
+  /** 验证码错误 */
+  CAPTCHA_INVALID: 40103,
+  /** 请求过于频繁 */
+  RATE_LIMITED: 42901,
+  /** 外部服务调用失败（SMTP/SMS/SSO 等） */
+  EXTERNAL_ERROR: 50201,
 
   /** 语音识别服务不可用 */
   ASR_FAILED: 50001,

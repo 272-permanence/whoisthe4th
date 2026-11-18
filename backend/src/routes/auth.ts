@@ -12,12 +12,19 @@ import { ErrorCodeEnum } from '../constants/errorCodes.js';
 import { maskSingle } from '../utils/mask.js';
 import { saveLoginLog } from '../services/logService.js';
 import { getLoggerInstance } from '../common/logger.js';
+import { verifyCaptcha } from '../services/captchaService.js';
 
 const router = Router();
 
+/** 图形验证码在密码校验之前，防止被暴力撞库 */
+function assertCaptcha(captchaId?: string, captchaCode?: string): void {
+  if (!captchaId || !captchaCode) throw new HttpError(400, ErrorCodeEnum.CAPTCHA_INVALID, '验证码必填');
+  if (!verifyCaptcha(String(captchaId), String(captchaCode))) throw new HttpError(401, ErrorCodeEnum.CAPTCHA_INVALID, '验证码错误或已过期');
+}
+
 /** POST /api/v1/auth/login */
 router.post('/login', (req: Request, res: Response) => {
-  const { username, password } = req.body ?? {};
+  const { username, password, captchaId, captchaCode } = req.body ?? {};
   const pino = getLoggerInstance();
   const traceId = (req as Request & { traceId?: string }).traceId ?? 'no-trace-id';
   const ip = req.ip ?? null;
@@ -34,6 +41,9 @@ router.post('/login', (req: Request, res: Response) => {
     }).catch(() => {});
     throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM, 'username / password 必填');
   }
+
+  // 图形验证码 FIRST —— 在密码 bcrypt 之前校验，防止撞库
+  assertCaptcha(captchaId, captchaCode);
 
   const result = login(String(username), String(password));
   if ('error' in result) {
@@ -67,13 +77,14 @@ router.post('/login', (req: Request, res: Response) => {
 
 /** POST /api/v1/auth/register */
 router.post('/register', (req: Request, res: Response) => {
-  const { username, password, nickname } = req.body ?? {};
+  const { username, password, nickname, captchaId, captchaCode } = req.body ?? {};
   if (!username || !password) {
     throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM, 'username / password 必填');
   }
   if (String(password).length < 6) {
     throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM, '密码至少 6 位');
   }
+  assertCaptcha(captchaId, captchaCode);
   // 开放注册强制 user 角色，管理员账号只能由已有管理员添加
   const result = register(String(username), String(password), nickname ? String(nickname) : undefined);
   if ('error' in result) {

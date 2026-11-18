@@ -276,9 +276,16 @@ export function mockWechatConfirmApi(sceneId: string): Promise<{ status: string 
   return postJson<{ status: string }>(`/wechat/qr/${encodeURIComponent(sceneId)}/mock-confirm`);
 }
 
-/** 模拟统一认证回调，直接换取登录态 */
+/** 模拟统一认证回调，直接换取登录态（兼容旧代码） */
 export async function ssoMockLoginApi(ticket?: string): Promise<LoginResult> {
   const data = await postJson<LoginResult>('/sso/mock-login', { ticket });
+  persistLogin(data);
+  return data;
+}
+
+/** 真实 SSO 票据消费：SSO 平台 302 回调带 ticket → 前端拿 ticket 调这个换 JWT */
+export async function ssoConsumeApi(ticket: string): Promise<LoginResult> {
+  const data = await postJson<LoginResult>('/sso/consume', { ticket });
   persistLogin(data);
   return data;
 }

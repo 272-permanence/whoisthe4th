@@ -107,6 +107,48 @@ export const config = {
     expiresIn: readText('JWT_EXPIRES_IN', '7d')
   },
 
+  // ============ 统一身份认证 6 通道（成员C） ============
+  unified: {
+    email: {
+      provider: readText('EMAIL_PROVIDER', 'mock') as 'mock' | 'smtp',
+      codeTtlSec: readInt('EMAIL_CODE_TTL', 300),
+      cooldownSec: readInt('EMAIL_CODE_COOLDOWN', 60),
+      exposeCode: readText('EMAIL_EXPOSE_CODE', 'true') === 'true',
+      smtpHost: readText('SMTP_HOST', 'smtp.qq.com'),
+      smtpPort: readInt('SMTP_PORT', 465),
+      smtpSecure: readText('SMTP_SECURE', 'true') === 'true',
+      smtpUser: readText('SMTP_USER', ''),
+      smtpPass: readText('SMTP_PASS', ''),
+      smtpFrom: readText('SMTP_FROM', '')
+    },
+    phone: {
+      provider: readText('PHONE_PROVIDER', 'mock') as 'mock' | 'sms',
+      codeTtlSec: readInt('PHONE_CODE_TTL', 300),
+      cooldownSec: readInt('PHONE_CODE_COOLDOWN', 60),
+      exposeCode: readText('PHONE_EXPOSE_CODE', 'true') === 'true',
+      // 阿里云 SMS（provider=sms 时必填）
+      accessKeyId: readText('ALIYUN_SMS_ACCESS_KEY_ID', ''),
+      accessKeySecret: readText('ALIYUN_SMS_ACCESS_KEY_SECRET', ''),
+      signName: readText('ALIYUN_SMS_SIGN_NAME', ''),
+      templateCode: readText('ALIYUN_SMS_TEMPLATE_CODE', '')
+    },
+    wechat: {
+      mode: readText('WECHAT_MODE', 'mock') as 'mock' | 'real',
+      mockQrExpireSec: 120
+    },
+    sso: {
+      mode: readText('SSO_MODE', 'mock') as 'mock' | 'real',
+      endpoint: readText('SSO_ENDPOINT', ''),
+      clientId: readText('SSO_CLIENT_ID', ''),
+      // mock 固定学号（保证多次演示到同一账号）
+      mockUid: readText('SSO_MOCK_UID', 'sso_20260001')
+    },
+    cert: {
+      mode: readText('CERT_MODE', 'mock') as 'mock' | 'ca',
+      maxFileBytes: 2 * 1024 * 1024
+    }
+  },
+
   // MySQL 读写分离（成员D 牵头，全组复用）
   db: {
     database: readText('DB_NAME', 'scenic_ai'),

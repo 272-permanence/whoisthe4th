@@ -22,9 +22,11 @@ import ttsRouter from './routes/tts.js';
 // 成员B：高德路径规划代理（导航页用）
 import navigationRouter from './routes/navigation.js';
 
-// 成员C：知识库 + 鉴权 + 内容管理 + 图片上传
+// 成员C：知识库 + 鉴权 + 内容管理 + 图片上传 + 统一身份认证 6 通道
 import kbRouter from './routes/kb.js';
 import authRouter from './routes/auth.js';
+import unifiedAuthRouter from './routes/unifiedAuth.js';
+import ssoPlatformRouter from './routes/ssoPlatform.js';
 import productRouter from './routes/product.js';
 import contentRouter from './routes/content.js';
 import adminContentRouter from './routes/adminContent.js';
@@ -52,9 +54,9 @@ import { logError } from './services/errorLogger.js';
 const log = createLogger('app');
 const app = express();
 
-// ========== CORS：暴露 X-Trace-Id 响应头，前端才能读到 ==========
+// ========== CORS：开发期全允许 origin，方便本地/局域网/手机调试 ==========
 app.use(cors({
-  origin: config.frontendUrl,
+  origin: true, // Reflect request origin，允许任何来源（credentials 必须配 array/true 时回显，这里 origin:true + credentials:true 组合 Express cors 会自动回显请求 origin）
   credentials: true,
   exposedHeaders: ['X-Trace-Id']
 }));
@@ -87,6 +89,10 @@ app.use('/api/v1/navigation', navigationRouter);
 // 成员C
 app.use('/api/v1/kb', kbRouter);
 app.use('/api/v1/auth', authRouter);
+// 统一身份认证 6 通道：captcha / providers / phone / email / wechat / sso / cert
+app.use('/api/v1/auth', unifiedAuthRouter);
+// SSO 模拟平台：独立路由组，返回 HTML 登录页 + ticket 票据（不走 /api 前缀）
+app.use('/sso-platform', ssoPlatformRouter);
 app.use('/api/v1/products', productRouter);
 app.use('/api/v1/content', contentRouter);
 app.use('/api/v1/admin/content', adminContentRouter);

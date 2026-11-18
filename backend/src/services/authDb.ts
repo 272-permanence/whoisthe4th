@@ -42,16 +42,30 @@ export function getAuthDb(): Database.Database {
   return db;
 }
 
+/** 安全补列：SQLite 不支持 ALTER TABLE ADD COLUMN IF NOT EXISTS，需要手动检查 */
+function addColumnIfNotExists(db: Database.Database, table: string, column: string, ddl: string): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some(c => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+  }
+}
+
 /** 初始化数据表（幂等） */
 function initTables(database: Database.Database): void {
   database.exec(`
-    -- 后台用户表（含 role 字段）
+    -- 后台用户表（含 role + status + 全部外部身份绑定列）
     CREATE TABLE IF NOT EXISTS admin_user (
       id            INTEGER PRIMARY KEY AUTOINCREMENT,
       username      TEXT    NOT NULL UNIQUE,
       password_hash TEXT    NOT NULL,
       role          TEXT    NOT NULL DEFAULT 'user',
       nickname      TEXT,
+      status        TEXT    NOT NULL DEFAULT 'active',
+      email         TEXT,
+      phone         TEXT,
+      wechat_openid TEXT,
+      sso_uid       TEXT,
+      cert_fingerprint TEXT,
       created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
     );
@@ -75,6 +89,26 @@ function initTables(database: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_product_category ON product(category);
     CREATE INDEX IF NOT EXISTS idx_product_name     ON product(name);
   `);
+
+  // 对已存在的老库（队友之前的 auth.db）幂等补列
+  migrateSchema(database);
+}
+
+/** 对已存在的老库补列（队友 main 之前只做了账号密码，现在加统一认证外部身份列） */
+function migrateSchema(db: Database.Database): void {
+  addColumnIfNotExists(db, 'admin_user', 'status', "TEXT NOT NULL DEFAULT 'active'");
+  addColumnIfNotExists(db, 'admin_user', 'email', 'TEXT');
+  addColumnIfNotExists(db, 'admin_user', 'phone', 'TEXT');
+  addColumnIfNotExists(db, 'admin_user', 'wechat_openid', 'TEXT');
+  addColumnIfNotExists(db, 'admin_user', 'sso_uid', 'TEXT');
+  addColumnIfNotExists(db, 'admin_user', 'cert_fingerprint', 'TEXT');
+
+  // SQLite UNIQUE 索引允许 NULL，一个用户可绑多个外部身份通道
+  try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_user_email ON admin_user(email)'); } catch { /* 忽略 */ }
+  try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_user_phone ON admin_user(phone)'); } catch { /* 忽略 */ }
+  try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_user_wechat ON admin_user(wechat_openid)'); } catch { /* 忽略 */ }
+  try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_user_sso ON admin_user(sso_uid)'); } catch { /* 忽略 */ }
+  try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_user_cert ON admin_user(cert_fingerprint)'); } catch { /* 忽略 */ }
 }
 
 /** 首次启动时写入一个默认管理员（username=admin, password=admin123） */

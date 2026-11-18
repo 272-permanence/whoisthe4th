@@ -123,6 +123,12 @@ const routes = [
     component: () => import('../views/Login.vue'),
     meta: { public: true, title: '登录' },
   },
+  {
+    path: '/sso-callback',
+    name: 'sso-callback',
+    component: () => import('../views/Login.vue'),
+    meta: { public: true, title: 'SSO 回调' },
+  },
 
   // ============ Admin 后台（成员C，完整嵌套 + 多了 products/users） ============
   {
