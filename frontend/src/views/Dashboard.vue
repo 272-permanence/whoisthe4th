@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 /**
  * @file 数据运营大屏
  * @author 第八组
@@ -56,11 +56,11 @@ function renderHotPoisChart() {
   const names = hotPois.value.map(p => p.name);
   const counts = hotPois.value.map(p => p.visitCount);
   hotPoisChart.value.setOption({
-    title: { text: '热门景点 TOP10', left: 'center', textStyle: { color: '#fff', fontSize: 16 } },
+    title: { text: '热门景点 TOP10', left: 'center', textStyle: { color: '#303A35', fontSize: 16 } },
     tooltip: { trigger: 'axis' },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: names, axisLabel: { color: '#ccc', interval: 0, rotate: 30 } },
-    yAxis: { type: 'value', axisLabel: { color: '#ccc' } },
+    xAxis: { type: 'category', data: names, axisLabel: { color: '#A5AAA5', interval: 0, rotate: 30 } },
+    yAxis: { type: 'value', axisLabel: { color: '#A5AAA5' } },
     series: [{
       type: 'bar',
       data: counts,
@@ -205,8 +205,8 @@ function updateLfStatusChart(
 ) {
   lfStatusChart.value?.setOption({
     title: [
-      { text: '失物招领状态分布', left: '25%', top: '5%', textStyle: { color: '#fff', fontSize: 14 } },
-      { text: '丢失 vs 捡到', left: '75%', top: '5%', textStyle: { color: '#fff', fontSize: 14 } }
+      { text: '失物招领状态分布', left: '25%', top: '5%', textStyle: { color: '#303A35', fontSize: 14 } },
+      { text: '丢失 vs 捡到', left: '75%', top: '5%', textStyle: { color: '#303A35', fontSize: 14 } }
     ],
     tooltip: { trigger: 'item' },
     series: [
@@ -214,7 +214,7 @@ function updateLfStatusChart(
         type: 'pie',
         radius: ['30%', '55%'],
         center: ['25%', '60%'],
-        label: { color: '#fff' },
+        label: { color: '#303A35' },
         data: [
           { value: statusDist.open, name: '待处理', itemStyle: { color: '#faad14' } },
           { value: statusDist.resolved, name: '已解决', itemStyle: { color: '#52c41a' } },
@@ -225,7 +225,7 @@ function updateLfStatusChart(
         type: 'pie',
         radius: ['30%', '55%'],
         center: ['75%', '60%'],
-        label: { color: '#fff' },
+        label: { color: '#303A35' },
         data: [
           { value: typeDist.lost, name: '丢失', itemStyle: { color: '#ff4d4f' } },
           { value: typeDist.found, name: '捡到', itemStyle: { color: '#1890ff' } }
@@ -243,17 +243,17 @@ function updateLfCategoryChart(categories: AnalyticsStats['lostFound']['topCateg
   const counts = categories.map(c => c.count);
 
   lfCategoryChart.value?.setOption({
-    title: { text: '失物招领热门分类 TOP5', left: 'center', textStyle: { color: '#fff', fontSize: 16 } },
+    title: { text: '失物招领热门分类 TOP5', left: 'center', textStyle: { color: '#303A35', fontSize: 16 } },
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
     grid: { left: '3%', right: '6%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'value', axisLabel: { color: '#ccc' } },
-    yAxis: { type: 'category', data: names, axisLabel: { color: '#ccc' } },
+    xAxis: { type: 'value', axisLabel: { color: '#A5AAA5' } },
+    yAxis: { type: 'category', data: names, axisLabel: { color: '#A5AAA5' } },
     series: [{
       type: 'bar',
       data: counts,
       itemStyle: { color: '#b37feb' },
       barWidth: '50%',
-      label: { show: true, position: 'right', color: '#fff' }
+      label: { show: true, position: 'right', color: '#303A35' }
     }]
   });
 }
@@ -263,13 +263,13 @@ function updateLfCategoryChart(categories: AnalyticsStats['lostFound']['topCateg
  */
 function updateSentimentChart(dist: AnalyticsStats['sentimentDist']) {
   sentimentChart.value?.setOption({
-    title: { text: '用户情感分布', left: 'center', textStyle: { color: '#fff', fontSize: 16 } },
+    title: { text: '用户情感分布', left: 'center', textStyle: { color: '#303A35', fontSize: 16 } },
     tooltip: { trigger: 'item' },
-    legend: { bottom: 0, textStyle: { color: '#ccc' } },
+    legend: { bottom: 0, textStyle: { color: '#A5AAA5' } },
     series: [{
       type: 'pie',
       radius: ['40%', '70%'],
-      label: { color: '#fff' },
+      label: { color: '#303A35' },
       data: [
         { value: dist.positive, name: '正面', itemStyle: { color: '#52c41a' } },
         { value: dist.neutral, name: '中性', itemStyle: { color: '#1890ff' } },
@@ -287,11 +287,11 @@ function updateHotChart(questions: AnalyticsStats['hotQuestions']) {
   const counts = questions.map(q => q.count);
 
   hotChart.value?.setOption({
-    title: { text: '热门问答 TOP10', left: 'center', textStyle: { color: '#fff', fontSize: 16 } },
+    title: { text: '热门问答 TOP10', left: 'center', textStyle: { color: '#303A35', fontSize: 16 } },
     tooltip: { trigger: 'axis' },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: names, axisLabel: { color: '#ccc', interval: 0, rotate: 30 } },
-    yAxis: { type: 'value', axisLabel: { color: '#ccc' } },
+    xAxis: { type: 'category', data: names, axisLabel: { color: '#A5AAA5', interval: 0, rotate: 30 } },
+    yAxis: { type: 'value', axisLabel: { color: '#A5AAA5' } },
     series: [{
       type: 'bar',
       data: counts,
@@ -309,11 +309,11 @@ function updateTrendChart(trend: AnalyticsStats['hourlyTrend']) {
   const counts = trend.map(t => t.count);
 
   trendChart.value?.setOption({
-    title: { text: '近 24 小时问答量趋势', left: 'center', textStyle: { color: '#fff', fontSize: 16 } },
+    title: { text: '近 24 小时问答量趋势', left: 'center', textStyle: { color: '#303A35', fontSize: 16 } },
     tooltip: { trigger: 'axis' },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: hours, axisLabel: { color: '#ccc' } },
-    yAxis: { type: 'value', axisLabel: { color: '#ccc' } },
+    xAxis: { type: 'category', data: hours, axisLabel: { color: '#A5AAA5' } },
+    yAxis: { type: 'value', axisLabel: { color: '#A5AAA5' } },
     series: [{
       type: 'line',
       data: counts,
@@ -481,10 +481,11 @@ function resizeCharts() {
 
 <style scoped>
 .dashboard {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
-  padding: 24px;
-  color: #fff;
+  min-height: 100%;
+  background: #F7F6F2;
+  padding: 0;
+  color: #303A35;
+  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 .dashboard-header {
@@ -501,373 +502,176 @@ function resizeCharts() {
   min-width: 0;
 }
 
-/* 返回按钮：与大屏整体一致的深色玻璃拟态 */
 .back-btn {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 6px 14px 6px 10px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 999px;
-  color: #e0e0e0;
-  font-size: 14px;
+  gap: 2px;
+  padding: 5px 14px;
+  background: #FFFFFF;
+  border: 1px solid #E8E8E2;
+  border-radius: 6px;
+  color: #526F61;
+  font-size: 13px;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.15s;
   white-space: nowrap;
+  height: 32px;
 }
-
-.back-btn:hover {
-  background: rgba(255, 255, 255, 0.16);
-}
-
-.back-arrow {
-  font-size: 18px;
-  line-height: 1;
-  transform: translateY(-1px);
-}
+.back-btn:hover { background: #E9EFEA; }
+.back-arrow { font-size: 16px; line-height: 1; }
 
 .dashboard-header h1 {
   margin: 0;
-  font-size: 24px;
-  letter-spacing: 2px;
-  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  color: #303A35;
 }
 
-.update-time {
-  color: #8c8c8c;
-  font-size: 14px;
-}
+.update-time { color: #7B827D; font-size: 13px; }
 
 .stat-cards {
-  display: flex;
-  gap: 24px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
   margin-bottom: 24px;
 }
 
 .card {
-  flex: 1;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
-  padding: 24px;
-  text-align: center;
+  background: #FFFFFF;
+  border: 1px solid #E8E8E2;
+  border-radius: 8px;
+  padding: 20px 20px;
 }
 
-.card-label {
-  font-size: 16px;
-  color: #bfbfbf;
-  margin-bottom: 12px;
-}
-
-.card-value {
-  font-size: 42px;
-  font-weight: bold;
-  color: #36cfc9;
-}
-
-.card-unit {
-  font-size: 20px;
-  margin-left: 4px;
-  color: #8c8c8c;
-}
-
-.card-sub {
-  margin-top: 6px;
-  font-size: 12px;
-  color: #8c8c8c;
-}
+.card-label { font-size: 13px; color: #7B827D; margin-bottom: 10px; }
+.card-value { font-size: 30px; font-weight: 600; color: #526F61; font-variant-numeric: tabular-nums; }
+.card-unit { font-size: 14px; color: #7B827D; margin: 0 2px; }
+.card-sub { margin-top: 4px; font-size: 12px; color: #A5AAA5; }
 
 .charts {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 24px;
+  gap: 16px;
 }
 
 .chart-box {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 16px;
+  background: #FFFFFF;
+  border: 1px solid #E8E8E2;
+  border-radius: 8px;
+  padding: 20px;
 }
 
-.chart {
-  width: 100%;
-  height: 320px;
-}
+.chart { width: 100%; height: 320px; }
+.full-width { grid-column: span 2; }
 
-.full-width {
-  grid-column: span 2;
-}
-
-/* Tab 切换 */
 .tab-nav {
   display: flex;
-  gap: 12px;
+  gap: 0;
   margin-bottom: 24px;
+  border-bottom: 1px solid #E8E8E2;
 }
 
 .tab-btn {
-  padding: 8px 24px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
-  color: #bfbfbf;
-  font-size: 15px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.tab-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.tab-btn.active {
-  background: #1890ff;
-  border-color: #1890ff;
-  color: #fff;
-}
-
-/* 日志审计 */
-.audit-title {
-  margin: 0 0 16px 0;
-  font-size: 16px;
-  color: #fff;
-}
-
-.audit-table {
-  width: 100%;
-  border-collapse: collapse;
+  padding: 10px 22px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #7B827D;
   font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.tab-btn:hover { color: #303A35; }
+.tab-btn.active {
+  color: #526F61;
+  border-bottom-color: #526F61;
+  font-weight: 500;
 }
 
-.audit-table th,
-.audit-table td {
-  padding: 10px 12px;
+.audit-title { margin: 0 0 14px 0; font-size: 16px; font-weight: 600; color: #303A35; }
+
+.audit-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.audit-table th, .audit-table td {
+  padding: 12px 14px;
   text-align: left;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  color: #e0e0e0;
+  border-bottom: 1px solid #EEEEE8;
+  color: #303A35;
 }
+.audit-table th { color: #A5AAA5; font-weight: 500; font-size: 13px; }
+.audit-table .danger { color: #C45F55; font-weight: 600; }
+.empty-tip { color: #A5AAA5; text-align: center; padding: 28px 0; font-size: 14px; }
 
-.audit-table th {
-  color: #8c8c8c;
-  font-weight: normal;
-}
-
-.audit-table .danger {
-  color: #ff4d4f;
-  font-weight: bold;
-}
-
-.empty-tip {
-  color: #8c8c8c;
-  text-align: center;
-  padding: 24px 0;
-}
-
-/* Trace 查询 */
-.trace-query {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-}
+.trace-query { display: flex; gap: 10px; margin-bottom: 16px; }
 
 .trace-input {
   flex: 1;
   padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: #FFFFFF;
+  border: 1px solid #E8E8E2;
   border-radius: 6px;
-  color: #fff;
+  color: #303A35;
   font-size: 14px;
+  height: 36px;
+  font-family: inherit;
 }
-
-.trace-input::placeholder {
-  color: #8c8c8c;
-}
+.trace-input::placeholder { color: #A5AAA5; }
 
 .trace-btn {
-  padding: 8px 20px;
-  background: #1890ff;
+  padding: 0 20px;
+  background: #526F61;
   border: none;
   border-radius: 6px;
-  color: #fff;
+  color: #FFFFFF;
   cursor: pointer;
   font-size: 14px;
+  height: 36px;
+  transition: background 0.15s;
+  font-family: inherit;
 }
+.trace-btn:hover { background: #425C50; }
+.trace-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.trace-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
+.trace-result { border-top: 1px solid #E8E8E2; padding-top: 14px; }
+.trace-summary { color: #7B827D; font-size: 14px; margin-bottom: 14px; }
+.trace-summary b { color: #526F61; font-weight: 600; }
 
-.trace-result {
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding-top: 12px;
-}
-
-.trace-summary {
-  color: #bfbfbf;
-  font-size: 14px;
-  margin-bottom: 12px;
-}
-
-.trace-summary b {
-  color: #36cfc9;
-}
-
-.trace-timeline {
-  max-height: 320px;
-  overflow-y: auto;
-}
-
+.trace-timeline { max-height: 320px; overflow-y: auto; }
 .trace-item {
   display: flex;
   gap: 12px;
   align-items: center;
   padding: 8px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  font-size: 13px;
+  border-bottom: 1px solid #F5F5F1;
+  font-size: 14px;
 }
+.trace-time { color: #A5AAA5; white-space: nowrap; font-family: monospace; font-size: 12px; }
+.trace-tag { padding: 2px 10px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
+.type-operation .trace-tag { background: #DCE5DD; color: #526F61; }
+.type-error .trace-tag { background: #F2DFDF; color: #C45F55; }
+.type-login .trace-tag { background: #DDE7DF; color: #4E8A68; }
+.trace-detail { color: #303A35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.trace-time {
-  color: #8c8c8c;
-  white-space: nowrap;
-  font-family: monospace;
-}
-
-.trace-tag {
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.type-operation .trace-tag {
-  background: rgba(24, 144, 255, 0.2);
-  color: #40a9ff;
-}
-
-.type-error .trace-tag {
-  background: rgba(255, 77, 79, 0.2);
-  color: #ff7875;
-}
-
-.type-login .trace-tag {
-  background: rgba(82, 196, 26, 0.2);
-  color: #73d13d;
-}
-
-.trace-detail {
-  color: #e0e0e0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 移动端适配：窄屏下单列布局，卡片两列排布 */
 @media (max-width: 768px) {
-  .dashboard {
-    padding: 12px 10px 20px;
-  }
-
-  .dashboard-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 6px;
-    margin-bottom: 14px;
-  }
-
-  .header-left {
-    gap: 8px;
-  }
-
-  .dashboard-header h1 {
-    font-size: 15px;
-    letter-spacing: 0;
-    line-height: 1.3;
-  }
-
-  .back-btn {
-    flex-shrink: 0;
-    padding: 5px 11px 5px 8px;
-    font-size: 13px;
-  }
-
-  .update-time {
-    font-size: 12px;
-    padding-left: 2px;
-  }
-
-  .stat-cards {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin-bottom: 14px;
-  }
-
-  .card {
-    padding: 14px 8px;
-    border-radius: 10px;
-  }
-
-  .card-label {
-    font-size: 13px;
-    margin-bottom: 8px;
-  }
-
-  .card-value {
-    font-size: 26px;
-  }
-
-  .charts {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
-
-  .full-width {
-    grid-column: span 1;
-  }
-
-  .chart {
-    height: 240px;
-  }
-
-  .tab-nav {
-    gap: 8px;
-    margin-bottom: 14px;
-  }
-
-  .tab-btn {
-    flex: 1;
-    padding: 8px 0;
-    text-align: center;
-    font-size: 14px;
-  }
-
-  /* 审计表格窄屏下横向滚动，避免列被挤碎 */
-  .chart-box {
-    overflow-x: auto;
-  }
-
-  .audit-table {
-    min-width: 460px;
-    font-size: 12px;
-  }
-
-  .audit-table th,
-  .audit-table td {
-    padding: 8px 6px;
-  }
-
-  .trace-query {
-    flex-wrap: nowrap;
-  }
+  .dashboard { padding: 0; }
+  .dashboard-header { flex-direction: column; align-items: stretch; gap: 8px; margin-bottom: 14px; }
+  .header-left { gap: 8px; }
+  .dashboard-header h1 { font-size: 15px; }
+  .stat-cards { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .card { padding: 14px; }
+  .card-value { font-size: 24px; }
+  .charts { grid-template-columns: 1fr; gap: 10px; }
+  .full-width { grid-column: span 1; }
+  .chart { height: 240px; }
+  .tab-nav { gap: 0; margin-bottom: 14px; }
+  .tab-btn { flex: 1; padding: 8px 0; font-size: 13px; text-align: center; }
+  .chart-box { overflow-x: auto; padding: 14px; }
+  .audit-table { min-width: 400px; font-size: 13px; }
+  .audit-table th, .audit-table td { padding: 8px 10px; }
 }
 </style>
 
 <style>
-/* 大屏页面需要铺满浏览器宽度，覆盖全局 #app 的 1126px 固定宽度限制 */
 #app:has(.dashboard) {
   width: 100%;
   max-width: 100%;
@@ -876,3 +680,4 @@ function resizeCharts() {
   text-align: left;
 }
 </style>
+

@@ -1,4 +1,4 @@
-<!--
+﻿<!--
   @file 商品管理后台
   @author 第八组（成员C）
   @date 2026-11-03
@@ -242,7 +242,7 @@ onMounted(loadProducts);
 
 .primary-btn {
   padding: 10px 20px;
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  background: linear-gradient(135deg, #526F61, #425C50);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -324,7 +324,7 @@ td.low {
 .link-btn {
   background: none;
   border: none;
-  color: #667eea;
+  color: #526F61;
   cursor: pointer;
   padding: 4px 8px;
   font-size: 13px;
@@ -388,7 +388,7 @@ td.low {
 
 .form-row input:focus,
 .form-row textarea:focus {
-  border-color: #667eea;
+  border-color: #526F61;
 }
 
 .form-grid {
@@ -404,3 +404,4 @@ td.low {
   margin-top: 20px;
 }
 </style>
+

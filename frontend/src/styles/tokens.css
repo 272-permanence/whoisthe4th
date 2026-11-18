@@ -7,25 +7,53 @@
  *              原则：只新增变量与类，不覆盖全局 reset；浅色底由各页面根节点自行设置。
  */
 
-:root {
-  /* 色彩：青瓷绿主色（全站唯一强调色，视觉权重 <=10%） */
-  --color-primary: #0f766e;
-  --color-primary-hover: #115e59;
-  --color-primary-soft: #eaf4f0;
+/* ============ 全局强制浅色（禁止浏览器/系统深色模式自动覆盖） ============ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: light !important;
+  }
+  input, select, textarea {
+    background-color: #FFFFFF !important;
+    color: #303A35 !important;
+    border-color: #E8E8E2 !important;
+  }
+  input::placeholder, textarea::placeholder {
+    color: #A5AAA5 !important;
+  }
+}
+html, body {
+  color-scheme: light;
+  background: #F7F6F2;
+  color: #303A35;
+}
+input, select, textarea {
+  background: #FFFFFF;
+  color: #303A35;
+  border-color: #E8E8E2;
+}
+input::placeholder, textarea::placeholder {
+  color: #A5AAA5;
+}
 
-  /* 中性色（带微量青绿倾向，不脏不闷） */
-  --color-bg: #f6f8f7;
-  --color-surface: #ffffff;
-  --color-border: #e3e8e6;
-  --color-text: #1a2420;
-  --color-text-2: #55605b;
-  --color-text-3: #6b7470;
+:root {
+  /* 色彩：西湖墨绿主色（全站唯一强调色，视觉权重 <=10%） */
+  --color-primary: #526F61;
+  --color-primary-hover: #425C50;
+  --color-primary-soft: #E9EFEA;
+
+  /* 中性色（宣纸暖白 + 深灰绿文字） */
+  --color-bg: #F7F6F2;
+  --color-surface: #FFFFFF;
+  --color-border: #E8E8E2;
+  --color-text: #303A35;
+  --color-text-2: #7B827D;
+  --color-text-3: #A5AAA5;
 
   /* 语义色（只表达状态，不做装饰） */
-  --color-success: #059669;
-  --color-warning: #b45309;
-  --color-danger: #dc2626;
-  --color-danger-soft: #fbefed;
+  --color-success: #4E8A68;
+  --color-warning: #C28C43;
+  --color-danger: #C45F55;
+  --color-danger-soft: #F2DFDF;
 
   /* 字体 */
   --font-sans: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', system-ui, sans-serif;
@@ -89,7 +117,7 @@
 }
 .btn:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.18);
+  box-shadow: 0 0 0 3px rgba(82, 111, 97, 0.18);
 }
 .btn-primary {
   background: var(--color-primary);
@@ -162,7 +190,7 @@
 }
 .input:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
+  box-shadow: 0 0 0 3px rgba(82, 111, 97, 0.15);
 }
 textarea.input {
   min-height: 0;
@@ -208,14 +236,14 @@ textarea.input {
   transition: background 0.12s;
 }
 .table tbody tr:hover {
-  background: #f7faf8;
+  background: #F1F2EE;
 }
 
 /* 弹窗：唯一允许使用 shadow-lg 的场景 */
 .modal-mask {
   position: fixed;
   inset: 0;
-  background: rgba(16, 24, 20, 0.45);
+  background: rgba(48, 58, 53, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;

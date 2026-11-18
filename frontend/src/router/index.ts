@@ -174,12 +174,23 @@ const routes = [
         component: () => import('../views/admin/UserAdmin.vue'),
         meta: { title: '用户管理' },
       },
-      // 客服工作台（成员D · WebSocket 实时聊天）
       {
         path: 'cs',
         name: 'admin-cs',
         component: () => import('../views/admin/CsWorkbench.vue'),
         meta: { title: '客服工作台' },
+      },
+      {
+        path: 'data-board',
+        name: 'admin-data-board',
+        component: () => import('../views/Dashboard.vue'),
+        meta: { title: '数据看板' },
+      },
+      {
+        path: 'logs',
+        name: 'admin-logs',
+        component: () => import('../views/admin/LogCenter.vue'),
+        meta: { title: '日志中心' },
       },
     ],
   },

@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+﻿﻿<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import {
@@ -21,9 +21,11 @@ import {
   type ProviderStatus,
   type WechatQrStatus
 } from '../api/auth';
+import { useUserStore } from '../stores/user';
 
 const router = useRouter();
 const route = useRoute();
+const userStore = useUserStore();
 
 /** 登录方式：账号密码 / 邮箱验证码 / 手机号验证码 / 微信扫码 / 统一认证 / 数字证书 */
 type LoginMethod = 'password' | 'email' | 'phone' | 'wechat' | 'sso' | 'cert';
@@ -73,6 +75,8 @@ const nickname = ref('');
 // 图形验证码
 const captchaId = ref('');
 const captchaCode = ref('');
+/** 后端是否提供验证码接口；不可用时自动跳过验证码校验 */
+const captchaAvailable = ref(true);
 const captchaSvg = ref('');
 const captchaLoading = ref(false);
 
@@ -89,9 +93,12 @@ async function loadCaptcha() {
     captchaId.value = data.captchaId;
     captchaSvg.value = data.svg;
     captchaCode.value = '';
+    captchaAvailable.value = true;
   } catch {
+    // 后端未提供验证码接口时降级：隐藏验证码并允许直接登录
     captchaSvg.value = '';
-    errorMsg.value = '验证码加载失败，请点击重试';
+    captchaId.value = '';
+    captchaAvailable.value = false;
   } finally {
     captchaLoading.value = false;
   }
@@ -108,7 +115,7 @@ async function handleSubmit() {
     errorMsg.value = '密码至少 6 位';
     return;
   }
-  if (!captchaId.value || !captchaCode.value.trim()) {
+  if (captchaAvailable.value && (!captchaId.value || !captchaCode.value.trim())) {
     errorMsg.value = '请填写验证码';
     return;
   }
@@ -451,6 +458,15 @@ async function handleCertLogin() {
 // ========================== 通用 ==========================
 
 function afterLogin(result: LoginResult) {
+  // 同步 Pinia 登录态，保证路由守卫与 apiClient 使用同一个 token
+  userStore.setToken(result.token);
+  userStore.setUserInfo({
+    id: String(result.user.id),
+    username: result.user.username,
+    displayName: result.user.displayName ?? result.user.username,
+    role: result.user.role,
+  });
+
   const redirect = route.query.redirect as string | undefined;
   if (redirect) {
     router.replace(redirect);
@@ -599,7 +615,7 @@ onUnmounted(() => {
             <input id="login-nickname" v-model="nickname" class="input" type="text" placeholder="给自己起个昵称" />
           </div>
 
-          <div class="form-row">
+          <div class="form-row" v-if="captchaAvailable">
             <label class="label" for="login-captcha">验证码</label>
             <div class="captcha-row">
               <input

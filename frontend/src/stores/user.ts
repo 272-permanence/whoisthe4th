@@ -22,10 +22,10 @@ const TOKEN_KEY = 'whoisthe4th_token';
 const USER_KEY = 'whoisthe4th_user';
 
 export const useUserStore = defineStore('user', () => {
-  // 从 localStorage 恢复登录态
-  const token = ref<string>(localStorage.getItem(TOKEN_KEY) || '');
+  // 从 localStorage 恢复登录态（兼容 api/auth.ts 的 token/user 键）
+  const token = ref<string>(localStorage.getItem(TOKEN_KEY) || localStorage.getItem('token') || '');
   const userInfo = ref<UserInfo | null>(
-    JSON.parse(localStorage.getItem(USER_KEY) || 'null')
+    JSON.parse(localStorage.getItem(USER_KEY) || localStorage.getItem('user') || 'null')
   );
 
   const isLoggedIn = computed(() => !!token.value);
