@@ -4,6 +4,7 @@
  * @date 2026-11-03
  */
 import { getCachedToken } from './auth';
+import { getTraceId } from '../common/apiClient';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 
@@ -31,7 +32,7 @@ export interface ContentItem {
 }
 
 function authHeaders(needAuth = true): Record<string, string> {
-  const h: Record<string, string> = {};
+  const h: Record<string, string> = { 'X-Trace-Id': getTraceId() };
   if (needAuth) {
     const token = getCachedToken();
     if (token) h['Authorization'] = `Bearer ${token}`;
@@ -41,7 +42,7 @@ function authHeaders(needAuth = true): Record<string, string> {
 
 // 公开接口（用户端动态渲染用）
 export async function listPublishedContent(type: ContentType): Promise<ContentItem[]> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/content/${type}`);
+  const res = await fetch(`${API_BASE_URL}/api/v1/content/${type}`, { headers: authHeaders(false) });
   const payload = (await res.json()) as ApiResult<ContentItem[]>;
   if (!res.ok || payload.code !== 0) throw new Error(payload.message);
   return payload.data;

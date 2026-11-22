@@ -114,6 +114,11 @@ export function fetchPois(all = false): Promise<PoiItem[]> {
   return apiFetch<PoiItem[]>(`/api/v1/poi${all ? '?all=1' : ''}`, { apiPrefix: PREFIX });
 }
 
+/** 查询单个景点详情（GET /api/v1/poi/:id），同时产生一条 /poi/:id 访问日志 */
+export function getPoiDetail(id: number): Promise<Poi> {
+  return apiFetch<Poi>(`/api/v1/poi/${id}`, { apiPrefix: PREFIX });
+}
+
 export function createPoi(data: Partial<PoiItem>): Promise<{ id: number }> {
   return apiFetch<{ id: number }>('/api/v1/poi', {
     apiPrefix: PREFIX, method: 'POST',

@@ -34,6 +34,11 @@ const DEFAULT_DASHSCOPE_MODEL = 'qwen-plus';
 const DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
 /** 知识库默认向量模型（需与成员B 的 RAG 链路保持一致） */
 const DEFAULT_EMBEDDING_MODEL = 'bge-m3';
+/** MySQL 读写分离默认端口：主库负责写、从库负责读 */
+const DEFAULT_DB_MASTER_PORT = 3307;
+const DEFAULT_DB_SLAVE_PORT = 3307;
+/** Redis 消息队列默认地址（Memurai / Redis 7 兼容） */
+const DEFAULT_REDIS_URL = 'redis://127.0.0.1:6379';
 
 /** ASR 提供方：mock 离线桩 / whisper-api 远程接口 / whisper-cli 本地 Whisper 可执行程序 */
 export type AsrProvider = 'mock' | 'whisper-api' | 'whisper-cli';
@@ -74,6 +79,16 @@ export const config = {
     apiKey: readText('DASHSCOPE_API_KEY', ''),
     model: readText('DASHSCOPE_MODEL', DEFAULT_DASHSCOPE_MODEL),
     baseUrl: DASHSCOPE_BASE_URL
+  },
+
+  // 高德地图（成员B：导航页）
+  amap: {
+    jsKey: readText('AMAP_JS_KEY', ''),
+    jsSecurityCode: readText('AMAP_JS_SECURITY_CODE', ''),
+    webServiceKey: readText('AMAP_WEB_SERVICE_KEY', ''),
+    directionWalkingUrl: 'https://restapi.amap.com/v3/direction/walking',
+    directionDrivingUrl: 'https://restapi.amap.com/v3/direction/driving',
+    directionDrivingAvoidUrl: 'https://restapi.amap.com/v3/direction/driving?extensions=all&strategy=10'
   },
 
   asr: {
@@ -128,6 +143,38 @@ export const config = {
     user: readText('DB_USER', 'root'),
     password: readText('DB_PASSWORD', ''),
     database: readText('DB_NAME', 'scenic_ai')
+  },
+
+  // MySQL 读写分离（成员D 牵头，全组复用）
+  db: {
+    database: readText('DB_NAME', 'scenic_ai'),
+    user: readText('DB_USER', 'root'),
+    password: readText('DB_PASSWORD', ''),
+    master: {
+      host: readText('DB_MASTER_HOST', '127.0.0.1'),
+      port: readInt('DB_MASTER_PORT', DEFAULT_DB_MASTER_PORT)
+    },
+    slave: {
+      host: readText('DB_SLAVE_HOST', '127.0.0.1'),
+      port: readInt('DB_SLAVE_PORT', DEFAULT_DB_SLAVE_PORT)
+    }
+  },
+
+  /**
+   * Redis 消息队列（成员D · 数据洞察模块牵头）
+   * REDIS_ENABLED=false 或 Redis 连不上时自动降级：日志直写 MySQL、大屏仅本机推送
+   */
+  redis: {
+    enabled: readText('REDIS_ENABLED', 'true') !== 'false',
+    url: readText('REDIS_URL', DEFAULT_REDIS_URL),
+    /** 日志消息的 Stream 键名 */
+    logStream: readText('REDIS_LOG_STREAM', 'scenic:log:stream'),
+    /** 日志消费者组名 */
+    logGroup: readText('REDIS_LOG_GROUP', 'log-writer'),
+    /** 大屏统计的 Pub/Sub 频道名 */
+    statsChannel: readText('REDIS_STATS_CHANNEL', 'scenic:stats'),
+    /** 大屏定时推送的分布式锁键名（只让一个节点算统计并发布） */
+    statsLockKey: readText('REDIS_STATS_LOCK_KEY', 'scenic:stats:pusher')
   },
 
   // JWT 认证配置（成员C）

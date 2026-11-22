@@ -7,7 +7,7 @@
  */
 import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { listPois, type Poi } from '../api/poi';
+import { getPoiDetail, listPois, type Poi } from '../api/poi';
 
 const router = useRouter();
 
@@ -35,6 +35,20 @@ const activeCategory = ref('');
 const loading = ref(false);
 const errorMsg = ref('');
 const selected = ref<Poi | null>(null);
+
+/**
+ * 打开景点详情弹窗：先请求一次详情接口，产生 /poi/:id 访问日志，
+ * 这样日志中心的热门景点和行为路径才会有真实数据。
+ * @param poi 列表中的景点
+ */
+async function openDetail(poi: Poi): Promise<void> {
+  selected.value = poi;
+  try {
+    selected.value = await getPoiDetail(poi.id);
+  } catch {
+    // 详情接口失败时仍用列表里的数据展示，不打断用户
+  }
+}
 
 /**
  * 拉取景点列表
@@ -131,7 +145,7 @@ onMounted(() => {
         v-for="poi in pois"
         :key="poi.id"
         class="poi-card"
-        @click="selected = poi"
+        @click="openDetail(poi)"
       >
         <div class="card-top">
           <span class="badge">{{ CATEGORY_LABELS[poi.category] ?? poi.category }}</span>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onUnmounted } from 'vue';
+import { getTraceId } from '../common/apiClient';
 
 interface SourceReference {
   /** 文档名称 */
@@ -48,7 +49,7 @@ async function sendMessage() {
 
     const response = await fetch(`${API_BASE}/api/v1/chat/stream`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Trace-Id': getTraceId() },
       body: JSON.stringify({ message: text }),
       signal: currentController.signal,
     });

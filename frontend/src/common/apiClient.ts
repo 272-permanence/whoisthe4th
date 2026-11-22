@@ -92,6 +92,8 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
 
   const response = await fetch(fullUrl, {
     ...options,
+    // 禁用 HTTP 缓存，避免重复请求被 304 命中后 response.ok 为 false
+    cache: options.cache ?? 'no-store',
     headers: {
       ...autoHeaders,
       ...(options.headers ?? {})

@@ -1,4 +1,4 @@
-﻿/**
+﻿﻿﻿﻿/**
  * @file 成员C 专属数据库：auth.db
  * @author 第八组（成员C）
  * @date 2026-11-03
@@ -88,6 +88,24 @@ function initTables(database: Database.Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_product_category ON product(category);
     CREATE INDEX IF NOT EXISTS idx_product_name     ON product(name);
+
+    -- CMS 内容表（content / adminContent 路由使用）
+    CREATE TABLE IF NOT EXISTS content (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      type        TEXT    NOT NULL,
+      title       TEXT    NOT NULL,
+      subtitle    TEXT,
+      content     TEXT,
+      image_url   TEXT,
+      extra_json  TEXT,
+      sort_order  INTEGER NOT NULL DEFAULT 0,
+      published   INTEGER NOT NULL DEFAULT 1,
+      created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_content_type      ON content(type);
+    CREATE INDEX IF NOT EXISTS idx_content_published ON content(published);
   `);
 
   // 对已存在的老库（队友之前的 auth.db）幂等补列

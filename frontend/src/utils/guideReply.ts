@@ -10,6 +10,7 @@
  */
 
 import { API_BASE_URL } from '../constants/apiConstants'
+import { getTraceId } from '../common/apiClient'
 
 /** 后端 SSE 事件类型 */
 const SSE_EVENT_TOKEN = 'token'
@@ -85,7 +86,7 @@ export async function buildGuideReply(
       try {
         const response = await fetch(`${API_BASE_URL}/api/v1/chat/stream`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Trace-Id': getTraceId() },
           body: JSON.stringify({ message: question })
         })
 

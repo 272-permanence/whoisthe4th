@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+﻿﻿﻿﻿<script setup lang="ts">
 /**
  * @file 日志中心（管理员）
  * @description 覆盖日志分享的全部能力：概览、操作/错误/登录日志查询、审计、
@@ -390,7 +390,12 @@ async function loadPathDetail(traceId: string) {
       { apiPrefix: ANALYTICS }
     )
   );
-  if (d) pathDetail.value = d;
+  if (d) {
+    pathDetail.value = d;
+    // 详情面板在表格下方，自动滚动到可见位置，避免用户以为按钮没反应
+    await nextTick();
+    document.querySelector('.path-detail')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
 }
 
 function resizeCharts() {
