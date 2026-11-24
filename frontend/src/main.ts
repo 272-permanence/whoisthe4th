@@ -5,7 +5,11 @@
  */
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import 'vant/lib/index.css'
+// 【性能优化】不再全量引入 vant/lib/index.css（约 197KB）
+// 普通组件样式由 unplugin-vue-components + VantResolver 按需自动注入；
+// 这里只需手动补充函数式调用的 Toast / Dialog 样式
+import 'vant/es/toast/style'
+import 'vant/es/dialog/style'
 import './style.css'
 import './styles/tokens.css'
 import App from './App.vue'

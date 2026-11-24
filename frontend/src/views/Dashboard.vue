@@ -7,9 +7,34 @@
  */
 import { ref, onMounted, onBeforeUnmount, shallowRef, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
-import * as echarts from 'echarts';
+// 【性能优化】ECharts 按需引入：只打包实际用到的柱状图/饼图/折线图及必要组件
+import * as echarts from 'echarts/core';
+import { BarChart, PieChart, LineChart } from 'echarts/charts';
+import {
+  TitleComponent,
+  TooltipComponent,
+  GridComponent,
+  LegendComponent,
+  AxisPointerComponent,
+} from 'echarts/components';
+import { CanvasRenderer } from 'echarts/renderers';
 import { getStats, connectStatsStream, type AnalyticsStats } from '../api/analytics';
 import { apiFetch } from '../common/apiClient';
+
+echarts.use([
+  BarChart,
+  PieChart,
+  LineChart,
+  TitleComponent,
+  TooltipComponent,
+  GridComponent,
+  LegendComponent,
+  AxisPointerComponent,
+  CanvasRenderer,
+]);
+
+/** ECharts 实例类型（按需引入后核心包不提供实例类型命名空间，改用 init 返回值推导） */
+type EChartsInstance = ReturnType<typeof echarts.init>;
 
 const router = useRouter();
 
@@ -21,7 +46,7 @@ function goBack(): void {
 // ==================== 日志审计相关 ====================
 const activeTab = ref<'stats' | 'audit'>('stats');
 
-const hotPoisChart = shallowRef<echarts.ECharts | null>(null);
+const hotPoisChart = shallowRef<EChartsInstance | null>(null);
 const hotPois = ref<{ poiId: number; name: string; visitCount: number }[]>([]);
 
 const abnormalLogins = ref<{ ip: string; failCount: number; firstFail: string; lastFail: string }[]>([]);
@@ -131,11 +156,11 @@ const lfResolvedCount = ref(0);
 const lfLostCount = ref(0);
 const lfFoundCount = ref(0);
 
-const sentimentChart = shallowRef<echarts.ECharts | null>(null);
-const hotChart = shallowRef<echarts.ECharts | null>(null);
-const trendChart = shallowRef<echarts.ECharts | null>(null);
-const lfStatusChart = shallowRef<echarts.ECharts | null>(null);
-const lfCategoryChart = shallowRef<echarts.ECharts | null>(null);
+const sentimentChart = shallowRef<EChartsInstance | null>(null);
+const hotChart = shallowRef<EChartsInstance | null>(null);
+const trendChart = shallowRef<EChartsInstance | null>(null);
+const lfStatusChart = shallowRef<EChartsInstance | null>(null);
+const lfCategoryChart = shallowRef<EChartsInstance | null>(null);
 
 let closeStream: (() => void) | null = null;
 

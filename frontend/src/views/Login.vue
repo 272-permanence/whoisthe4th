@@ -14,7 +14,6 @@ import {
   pollWechatQrApi,
   mockWechatScanApi,
   mockWechatConfirmApi,
-  ssoMockLoginApi,
   ssoConsumeApi,
   certLoginApi,
   type LoginResult,
