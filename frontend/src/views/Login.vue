@@ -1,5 +1,5 @@
-﻿﻿﻿﻿﻿﻿<script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+﻿<script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import {
   loginApi,
@@ -15,7 +15,6 @@ import {
   mockWechatScanApi,
   mockWechatConfirmApi,
   ssoMockLoginApi,
-  ssoConsumeApi,
   certLoginApi,
   type LoginResult,
   type ProviderStatus,
@@ -75,8 +74,6 @@ const nickname = ref('');
 // 图形验证码
 const captchaId = ref('');
 const captchaCode = ref('');
-/** 后端是否提供验证码接口；不可用时自动跳过验证码校验 */
-const captchaAvailable = ref(true);
 const captchaSvg = ref('');
 const captchaLoading = ref(false);
 
@@ -93,12 +90,9 @@ async function loadCaptcha() {
     captchaId.value = data.captchaId;
     captchaSvg.value = data.svg;
     captchaCode.value = '';
-    captchaAvailable.value = true;
   } catch {
-    // 后端未提供验证码接口时降级：隐藏验证码并允许直接登录
     captchaSvg.value = '';
-    captchaId.value = '';
-    captchaAvailable.value = false;
+    errorMsg.value = '验证码加载失败，请点击重试';
   } finally {
     captchaLoading.value = false;
   }
@@ -115,7 +109,7 @@ async function handleSubmit() {
     errorMsg.value = '密码至少 6 位';
     return;
   }
-  if (captchaAvailable.value && (!captchaId.value || !captchaCode.value.trim())) {
+  if (!captchaId.value || !captchaCode.value.trim()) {
     errorMsg.value = '请填写验证码';
     return;
   }
@@ -393,19 +387,16 @@ async function handleMockConfirm() {
 
 const ssoLoading = ref(false);
 
-/**
- * 跳转到后端 SSO 模拟平台（真实 CAS 风格：HTML 登录页 → 颁发 ticket → 302 跳回）
- * 后端 SSO 平台地址：http://localhost:8000/sso-platform/login
- */
 async function handleSsoLogin() {
   errorMsg.value = '';
-  // 前端地址栏里的 origin（http://localhost:5173），作为 SSO 平台登录成功后的回调地址
-  const callbackUrl = `${window.location.origin}/sso-callback`;
-  const ssoPlatformUrl = `http://localhost:8000/sso-platform/login?service=${encodeURIComponent(callbackUrl)}`;
-  // 在新标签页打开 SSO 平台（不打断当前登录页）
-  window.open(ssoPlatformUrl, '_blank');
-  // 用户在 SSO 平台登录后，SSO 平台会 302 跳回 /sso-callback?ticket=xxx
-  // /sso-callback 路由也指向 Login.vue，onMounted 会自动 consume ticket
+  ssoLoading.value = true;
+  try {
+    afterLogin(await ssoMockLoginApi());
+  } catch (err: unknown) {
+    errorMsg.value = err instanceof Error ? err.message : '统一认证登录失败';
+  } finally {
+    ssoLoading.value = false;
+  }
 }
 
 // ========================== 数字证书 ==========================
@@ -458,13 +449,13 @@ async function handleCertLogin() {
 // ========================== 通用 ==========================
 
 function afterLogin(result: LoginResult) {
-  // 同步 Pinia 登录态，保证路由守卫与 apiClient 使用同一个 token
+  // 同步真实登录态到全局 store，否则 /dashboard 路由守卫读不到 token
   userStore.setToken(result.token);
   userStore.setUserInfo({
     id: String(result.user.id),
     username: result.user.username,
-    displayName: result.user.displayName ?? result.user.username,
-    role: result.user.role,
+    displayName: result.user.nickname ?? result.user.username,
+    role: result.user.role === 'admin' ? 'admin' : 'visitor',
   });
 
   const redirect = route.query.redirect as string | undefined;
@@ -492,48 +483,6 @@ function switchMethod(next: LoginMethod) {
 onMounted(async () => {
   loadCaptcha();
   providers.value = await getProvidersApi();
-
-  // ========== SSO 平台回调自动 consume ==========
-  tryAutoConsumeTicket();
-});
-
-/** 尝试从 URL 里拿 ticket 并自动 consume（双保险：route.query + window.location.search） */
-async function tryAutoConsumeTicket() {
-  let ticket = '';
-  if (typeof route.query.ticket === 'string') ticket = route.query.ticket.trim();
-  if (!ticket) {
-    const params = new URLSearchParams(window.location.search);
-    const t = params.get('ticket');
-    if (t) ticket = t.trim();
-  }
-  const isCallback = route.path === '/sso-callback' || window.location.pathname === '/sso-callback';
-  if (!ticket || !isCallback) return;
-
-  errorMsg.value = '';
-  ssoLoading.value = true;
-  try {
-    const result = await ssoConsumeApi(ticket);
-    // 清掉 URL 里的 ticket（安全 + 美观）
-    router.replace({ path: '/login', query: {} });
-    // 也清掉浏览器地址栏残留
-    if (window.history.replaceState) {
-      const cleanUrl = window.location.origin + '/login';
-      window.history.replaceState({}, '', cleanUrl);
-    }
-    afterLogin(result);
-  } catch (err: unknown) {
-    errorMsg.value = err instanceof Error ? err.message : 'SSO 票据消费失败';
-    router.replace({ path: '/login', query: {} });
-  } finally {
-    ssoLoading.value = false;
-  }
-}
-
-// watch 保证 SPA 内部路由切换也能捕获 ticket（某些浏览器 302 可能触发）
-watch(() => route.query.ticket, () => {
-  if (route.query.ticket && typeof route.query.ticket === 'string') {
-    tryAutoConsumeTicket();
-  }
 });
 
 onUnmounted(() => {
@@ -615,7 +564,7 @@ onUnmounted(() => {
             <input id="login-nickname" v-model="nickname" class="input" type="text" placeholder="给自己起个昵称" />
           </div>
 
-          <div class="form-row" v-if="captchaAvailable">
+          <div class="form-row">
             <label class="label" for="login-captcha">验证码</label>
             <div class="captcha-row">
               <input

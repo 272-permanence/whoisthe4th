@@ -22,6 +22,7 @@ import { maskSingle } from '../utils/mask.js';
 import { saveLoginLog } from '../services/logService.js';
 import { getLoggerInstance } from '../common/logger.js';
 import { generateCaptcha, verifyCaptcha } from '../services/captchaService.js';
+import { config } from '../config.js';
 import {
   sendEmailCode, verifyEmailCode, loginByEmail,
   sendPhoneCode, verifyPhoneCode, loginByPhone,
@@ -81,11 +82,10 @@ router.get('/captcha', captchaLimiter, (_req, res) => {
 router.get('/providers', (_req, res) => {
   const sso = getSsoConfig();
   ok(res, {
-    // email / phone / wechat / cert 暂未做 config 驱动，默认 mock
-    email: { mode: 'mock', exposeCode: false },
-    phone: { mode: 'mock', exposeCode: false },
-    wechat: { mode: 'mock', exposeCode: false },
-    cert: { mode: 'mock', exposeCode: false },
+    email: { mode: config.unified.email.provider, exposeCode: config.unified.email.exposeCode },
+    phone: { mode: config.unified.phone.provider, exposeCode: config.unified.phone.exposeCode },
+    wechat: { mode: config.unified.wechat.mock ? 'mock' : 'real', exposeCode: false },
+    cert: { mode: config.unified.cert.mode, exposeCode: false },
     sso: { mode: sso.mode, loginUrl: sso.url, clientId: sso.clientId },
   });
 });
@@ -96,13 +96,9 @@ router.get('/providers', (_req, res) => {
 router.post('/email/code', emailCodeSendLimiter, loginFailIpLimiter, wrap(async (req, res) => {
   const { email } = req.body ?? {};
   if (!email || !EMAIL_REGEX.test(email)) throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM, '邮箱格式错误');
-  try {
-    const r = await sendEmailCode(String(email));
-    ok(res, r);
-  } catch (e: any) {
-    if (e.status === 429) throw new HttpError(429, ErrorCodeEnum.RATE_LIMITED, e.message);
-    throw new HttpError(502, ErrorCodeEnum.EXTERNAL_ERROR, e.message);
-  }
+  const r = await sendEmailCode(String(email));
+  if ('error' in r) throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM, r.error);
+  ok(res, r);
 }));
 
 /** POST /api/v1/auth/email/login —— 邮箱验证码登录 */
@@ -141,13 +137,9 @@ router.post('/email/login', emailLoginLimiter, loginFailIpLimiter, (req, res) =>
 router.post('/phone/code', phoneCodeSendLimiter, loginFailIpLimiter, wrap(async (req, res) => {
   const { phone } = req.body ?? {};
   if (!phone || !PHONE_REGEX.test(phone)) throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM, '请输入正确的 11 位手机号');
-  try {
-    const r = await sendPhoneCode(String(phone));
-    ok(res, r);
-  } catch (e: any) {
-    if (e.status === 429) throw new HttpError(429, ErrorCodeEnum.RATE_LIMITED, e.message);
-    throw new HttpError(502, ErrorCodeEnum.EXTERNAL_ERROR, e.message);
-  }
+  const r = await sendPhoneCode(String(phone));
+  if ('error' in r) throw new HttpError(400, ErrorCodeEnum.INVALID_PARAM, r.error);
+  ok(res, r);
 }));
 
 /** POST /api/v1/auth/phone/login —— 手机号验证码登录 */

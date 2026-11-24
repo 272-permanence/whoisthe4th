@@ -5,7 +5,8 @@
  * @description 埋点上报、统计查询、SSE 实时推送
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+import { API_BASE_URL } from '../constants/apiConstants';
+
 const BASE_URL = `${API_BASE_URL}/api/v1/analytics`;
 
 export interface SentimentDist {

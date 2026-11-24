@@ -6,8 +6,17 @@
  *              所有数据均来自后端真实接口，无任何 mock。
  */
 import { ref, onMounted, onBeforeUnmount, shallowRef, nextTick } from 'vue';
-import * as echarts from 'echarts';
+// 【性能优化】ECharts 按需引入，避免全量打包（本页只用柱状图 + 折线图）
+import * as echarts from 'echarts/core';
+import { BarChart, LineChart } from 'echarts/charts';
+import { TooltipComponent, GridComponent } from 'echarts/components';
+import { CanvasRenderer } from 'echarts/renderers';
 import { apiFetch } from '../../common/apiClient';
+
+echarts.use([BarChart, LineChart, TooltipComponent, GridComponent, CanvasRenderer]);
+
+/** ECharts 实例类型（按需引入后核心包不提供实例类型命名空间） */
+type EChartsInstance = ReturnType<typeof echarts.init>;
 
 const LOGS = '/api/v1/logs';
 const ANALYTICS = '/api/v1/analytics';
@@ -312,8 +321,8 @@ const pathDetail = ref<{ traceId: string; steps: OperationLog[] } | null>(null);
 
 const hotChartEl = ref<HTMLDivElement | null>(null);
 const hourChartEl = ref<HTMLDivElement | null>(null);
-const hotChart = shallowRef<echarts.ECharts | null>(null);
-const hourChart = shallowRef<echarts.ECharts | null>(null);
+const hotChart = shallowRef<EChartsInstance | null>(null);
+const hourChart = shallowRef<EChartsInstance | null>(null);
 
 function renderHotChart() {
   if (!hotChartEl.value) return;

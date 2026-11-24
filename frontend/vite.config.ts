@@ -28,4 +28,19 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    // 【性能优化】按库手动分包：体积大且更新频率低的依赖单独成块，命中浏览器长效缓存
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return;
+          if (id.includes('echarts') || id.includes('zrender')) return 'vendor-echarts';
+          if (id.includes('pixi')) return 'vendor-pixi';
+          if (id.includes('vant') || id.includes('@vant')) return 'vendor-vant';
+          if (id.includes('socket.io') || id.includes('engine.io')) return 'vendor-socket';
+          return 'vendor';
+        },
+      },
+    },
+  },
 })

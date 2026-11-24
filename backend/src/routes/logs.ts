@@ -53,11 +53,14 @@ router.post('/operation', async (req: Request, res: Response) => {
     }
     const action = clip(body.action, 32) ?? 'click';
     const pagePath = clip(body.pagePath, MAX_PATH) ?? '/';
+    const parsedUserId = body.userId === null || body.userId === undefined || body.userId === ''
+      ? NaN
+      : Number(body.userId);
 
     // 写入队列（Redis 不可用时内部自动降级直写 MySQL），失败不影响响应
     await saveOperationLog({
       trace_id: req.traceId ?? 'unknown',
-      user_id: typeof body.userId === 'number' || typeof body.userId === 'string' ? Number(body.userId) || null : null,
+      user_id: Number.isFinite(parsedUserId) ? parsedUserId : null,
       api_path: pagePath,
       http_method: 'CLICK',
       request_params: {
