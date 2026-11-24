@@ -18,12 +18,13 @@ import { sendLoginCodeMail } from './mailService.js';
 let aliyunSmsClient: Awaited<ReturnType<typeof createAliyunSmsClient>> | null = null;
 
 /**
- * 构造阿里云 dysmsapi 客户端（单例懒加载）
- * endpoint 固定 dysmsapi.aliyuncs.com（国内短信服务）
+ * 构造阿里云 DYPN 验证码认证客户端（单例懒加载）
+ * endpoint 固定 dypnsapi.aliyuncs.com（验证码认证服务）
+ * 注意：SDK ESM 嵌套导出 —— DypnMod.default.default 才是 Client 构造函数
  */
 async function createAliyunSmsClient() {
-  const DysmsClientModule: any = await import('@alicloud/dysmsapi20170525');
-  const Client = DysmsClientModule.default;
+  const DypnClientModule: any = await import('@alicloud/dypnsapi20170525');
+  const Client = DypnClientModule.default.default;
   const OpenApiUtils: any = await import('@alicloud/openapi-core/dist/utils.js');
   const Config = OpenApiUtils.Config;
   const sms = config.unified.phone;
@@ -31,10 +32,10 @@ async function createAliyunSmsClient() {
     new Config({
       accessKeyId: sms.accessKeyId,
       accessKeySecret: sms.accessKeySecret,
-      endpoint: 'dysmsapi.aliyuncs.com'
+      endpoint: 'dypnsapi.aliyuncs.com'
     })
   );
-  return { client, DysmsClientModule };
+  return { client, DypnClientModule };
 }
 
 export interface LoginPayload {
@@ -182,21 +183,22 @@ export async function sendPhoneCode(
     try {
       // 懒加载客户端（避免 mock 模式启动时就去解析 SDK 模块）
       if (!aliyunSmsClient) aliyunSmsClient = await createAliyunSmsClient();
-      const { client, DysmsClientModule } = aliyunSmsClient;
-      const SendSmsRequest = DysmsClientModule.SendSmsRequest;
+      const { client, DypnClientModule } = aliyunSmsClient;
+      const SendSmsVerifyCodeRequest = DypnClientModule.SendSmsVerifyCodeRequest;
 
-      const response: any = await client.sendSms(
-        new SendSmsRequest({
-          phoneNumbers: key,
+      const response: any = await client.sendSmsVerifyCode(
+        new SendSmsVerifyCodeRequest({
+          phoneNumber: key,
           signName: sms.signName,
           templateCode: sms.templateCode,
-          templateParam: JSON.stringify({ code })
+          // 系统模板 100001 需要两个变量：code + min（有效期分钟数）
+          templateParam: JSON.stringify({ code, min: Math.floor(ttlSec / 60) })
         })
       );
 
-      // 阿里云 SMS 很坑：即使失败也返回 HTTP 200，必须看 body.Code
+      // DYPN 很坑：即使失败也返回 HTTP 200，必须看 body.code（小写！和 DYSMS 不同）
       const body = response?.body ?? response?.data;
-      const codeStr: string = body?.Code ?? 'UNKNOWN';
+      const codeStr: string = body?.code ?? 'UNKNOWN';
 
       if (codeStr === 'OK') {
         // 发送成功 —— 验证码保留等待用户输入，返回时不下发明文
@@ -207,8 +209,8 @@ export async function sendPhoneCode(
         };
       }
 
-      // —— 常见错误码处理 ——
-      if (codeStr === 'isv.BUSINESS_LIMIT_CONTROL') {
+      // —— DYPN 常见错误码处理 ——
+      if (codeStr === 'biz.FREQUENCY') {
         // 同一手机号发送过于频繁 —— 不删除 phoneCodes 记录（下次冷却时间还会在）
         const prevSent = prev ? prev.lastSentAt : 0;
         const wait = Math.ceil((sms.cooldownSec * 1000 - (now - prevSent)) / 1000);
@@ -218,23 +220,20 @@ export async function sendPhoneCode(
       // 配置/签名/模板问题 —— 不占用冷却，允许用户改配置后重试
       phoneCodes.delete(key);
       const errorMap: Record<string, string> = {
-        'isv.TEMPLATE_MISSING': '短信模板不存在，请检查 TEMPLATE_CODE',
-        'isv.TEMPLATE_PARAMS_ILLEGAL': '短信模板变量格式错误（应为 {"code":"xxx"}）',
-        'isv.SIGN_NAME_ILLEGAL': '短信签名未通过审核或格式错误',
-        'isv.SIGN_NAME_MISMATCH': '短信签名与模板不匹配',
-        'isv.ACCOUNT_NOT_EXISTS': '阿里云 AccessKey 所属账号不存在',
-        'isv.INVALID_PARAMETERS': '请求参数非法（签名/模板/手机号格式）',
-        'isv.MOBILE_NUMBER_ILLEGAL': '手机号格式错误',
-        'isv.AMOUNT_NOT_ENOUGH': '阿里云短信账户余额不足，请充值',
-        'isv.RAM_PERMISSION_DENY': 'RAM 子账号缺少 dysms 权限，请授权 AliyunDysmsFullAccess'
+        'biz.SIGN_NOT_FOUND': '短信签名不存在，请检查 SIGN_NAME',
+        'biz.TEMPLATE_NOT_FOUND': '短信模板不存在，请检查 TEMPLATE_CODE',
+        'biz.PARAM_ERROR': '请求参数错误（签名/模板/手机号格式）',
+        'biz.MOBILE_INVALID': '手机号格式错误',
+        'biz.RAM_PERMISSION_DENY': 'RAM 子账号缺少 dypns 权限，请授权 AliyunDyPnsFullAccess',
+        'biz.BALANCE_NOT_ENOUGH': '阿里云短信账户余额不足，请充值'
       };
-      const hint = errorMap[codeStr] ?? `阿里云返回错误：${codeStr} ${body?.Message ?? ''}`;
-      console.error(`[unified-auth] 阿里云 SMS 发送失败 [${key}]:`, codeStr, body?.Message ?? '');
+      const hint = errorMap[codeStr] ?? `阿里云返回错误：${codeStr} ${body?.message ?? ''}`;
+      console.error(`[unified-auth] DYPN 发送失败 [${key}]:`, codeStr, body?.message ?? '');
       return { error: `短信发送失败：${hint}` };
     } catch (err) {
       // 网络异常 / SDK 内部错误 —— 同样不占用冷却
       phoneCodes.delete(key);
-      console.error('[unified-auth] 阿里云 SMS 调用异常:', err);
+      console.error('[unified-auth] DYPN 调用异常:', err);
       return { error: '短信发送失败，请稍后重试（网络或服务异常）' };
     }
   }
