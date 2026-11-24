@@ -1,5 +1,5 @@
 /**
- * @file 日志消息队列（成员D · 数据洞察）
+ * @file 日志消息队列（成员D · 数据洞察）日志异步落库
  * @description 用 Redis Stream 解耦「业务写日志」与「日志落库」：
  *              - 生产者：业务侧调用 saveXxxLog 时 XADD 一条消息，立即返回，不阻塞业务响应
  *              - 消费者：独立连接 XREADGROUP 拉取消息，按类型写入 MySQL 后 XACK
@@ -129,16 +129,6 @@ export async function startLogQueueConsumer(): Promise<void> {
       await client.xgroup('CREATE', config.redis.logStream, config.redis.logGroup, '$', 'MKSTREAM');
     } catch (error) {
       if (!String(error).includes('BUSYGROUP')) throw error;
-    }
-
-    // 关键防护：如果 stream 已存在且有消息后才创建 group，Redis 会把
-    // last-delivered-id 自动设成 max-stream-id → 后续 XREADGROUP ">" 永远返回 null。
-    // 这里强制重置为 0-0，确保 ">" 能读到所有未投递的新消息。
-    try {
-      await client.xgroup('SETID', config.redis.logStream, config.redis.logGroup, '0');
-    } catch (e) {
-      // SETID 失败不是致命错误，最多这次重启漏掉一些残留消息
-      log.WARN(`XGROUP SETID 跳过: ${String(e)}`);
     }
 
     consumerClient = client;

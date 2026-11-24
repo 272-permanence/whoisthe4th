@@ -321,7 +321,7 @@ router.get('/trace/:traceId', async (req: Request, res: Response) => {
       return;
     }
 
-    const [operations, errors, logins] = await Promise.all([
+    const [operations, errors, logins] = await Promise.all([// 并行查询三类日志
       executeRead<Record<string, unknown>[]>(
         `SELECT * FROM operation_log WHERE trace_id = ? ORDER BY created_at ASC`,
         [traceId]
@@ -337,7 +337,7 @@ router.get('/trace/:traceId', async (req: Request, res: Response) => {
     ]);
 
     // 合并后按 created_at 排序
-    type TimelineItem = Record<string, unknown> & { log_type: string };
+    type TimelineItem = Record<string, unknown> & { log_type: string }; // 合并后的日志项，包含日志类型
     const timeline: TimelineItem[] = [
       ...operations.map((r) => ({ ...r, log_type: 'operation' } as TimelineItem)),
       ...errors.map((r) => ({ ...r, log_type: 'error' } as TimelineItem)),

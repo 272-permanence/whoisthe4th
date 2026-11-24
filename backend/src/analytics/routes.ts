@@ -35,7 +35,7 @@ let statsSubscriber: Redis | null = null;
  *   从而让 Tomcat 多节点部署时大屏也能收到同一个数据源
  * - Redis 不可用：退化为原有逻辑，仅当本机有客户端时本地计算并广播
  */
-export async function startAnalyticsPush(): Promise<void> {
+export async function startAnalyticsPush(): Promise<void> {// 启动大屏统计推送
   if (pushTimer) return;
 
   if (getRedisClient()) {
@@ -44,7 +44,7 @@ export async function startAnalyticsPush(): Promise<void> {
       statsSubscriber = subscriber;
       await subscriber.subscribe(config.redis.statsChannel);
       subscriber.on('message', (channel, message) => {
-        if (channel !== config.redis.statsChannel) return;
+        if (channel !== config.redis.statsChannel) return;// 过滤非统计消息
         try {
           sseBroker.broadcast('stats', JSON.parse(message));
         } catch (error) {
@@ -58,7 +58,7 @@ export async function startAnalyticsPush(): Promise<void> {
   }
 
   pushTimer = setInterval(() => {
-    void pushStats();
+    void pushStats();// 每 5 秒推送一次统计数据,执行统计推送
   }, PUSH_INTERVAL);
 }
 
@@ -101,8 +101,8 @@ async function pushStats(): Promise<void> {
   }
 
   try {
-    if (!(await isPushLeader(redis))) return;
-    const stats = await computeStats();
+    if (!(await isPushLeader(redis))) return;// 仅抢到锁的节点算统计并 publish,竞争分布式锁
+    const stats = await computeStats();// 计算统计数据
     await redis.publish(config.redis.statsChannel, JSON.stringify(stats));
   } catch (error) {
     log.ERROR(`统计推送失败: ${String(error)}`);
@@ -742,13 +742,13 @@ router.get('/recommend/related-pois', async (req: Request, res: Response) => {
        WHERE o.api_path LIKE '%/poi/%'
          AND o.http_method = 'GET'
          AND o.trace_id IN (
-           SELECT DISTINCT trace_id FROM operation_log
+           SELECT DISTINCT trace_id FROM operation_log // 内层查询：筛选出访问该 poi 的 traceId
            WHERE api_path LIKE '%/poi/%'
              AND http_method = 'GET'
              AND CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(api_path, '/poi/', -1), '?', 1) AS UNSIGNED) = ?
          )
        GROUP BY poi_id, p.name
-       HAVING poi_id <> ?
+       HAVING poi_id <> ? // 排除当前 poi 自身
        ORDER BY co_visit_count DESC
        LIMIT ?`,
       [poiId, poiId, limit]
