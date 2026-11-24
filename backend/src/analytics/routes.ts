@@ -517,6 +517,204 @@ router.get('/behaviors/active-hours', async (_req: Request, res: Response) => {
 });
 
 // =============================================================================
+// 用户画像接口（基于 operation_log 前端埋点聚合）
+// =============================================================================
+
+/** 一条前端点击/行为埋点行 */
+interface TrackEventRow {
+  trace_id: string;
+  user_id: number | null;
+  api_path: string;
+  request_params: string | null;
+  created_at: string | Date;
+}
+
+/** 安全解析 request_params（历史数据可能是坏 JSON） */
+function parseTrackParams(raw: TrackEventRow['request_params']): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * GET /api/v1/analytics/users
+ * 有埋点数据的用户列表（按事件数倒序），供大屏画像 Tab 选择
+ */
+router.get('/users', async (_req: Request, res: Response) => {
+  try {
+    const rows = await executeRead<Array<{ user_id: number; event_count: number; last_active: string | Date }>>(
+      `SELECT user_id,
+              COUNT(*) AS event_count,
+              MAX(created_at) AS last_active
+       FROM operation_log
+       WHERE http_method = 'CLICK'
+         AND user_id IS NOT NULL
+       GROUP BY user_id
+       ORDER BY event_count DESC
+       LIMIT 20`
+    );
+
+    res.json({
+      code: 0,
+      message: 'ok',
+      data: rows.map(r => ({
+        userId: Number(r.user_id),
+        eventCount: Number(r.event_count),
+        lastActive: r.last_active,
+      })),
+    });
+  } catch (error) {
+    log.ERROR(`用户列表查询失败: ${String(error)}`);
+    res.status(500).json({ code: ErrorCodeEnum.INTERNAL_ERROR, message: '用户列表查询失败' });
+  }
+});
+
+/**
+ * GET /api/v1/analytics/users/profile?userId=1&days=7
+ * 单个用户的行为画像：五类行为计数、平均停留、活跃时段、偏好对象、标签
+ */
+router.get('/users/profile', async (req: Request, res: Response) => {
+  try {
+    const userId = Number(req.query.userId);
+    if (!Number.isFinite(userId) || userId < 0) {
+      res.status(400).json({ code: ErrorCodeEnum.INVALID_PARAM, message: 'userId 无效' });
+      return;
+    }
+    const days = Math.min(30, Math.max(1, Number(req.query.days) || 7));
+
+    const rows = await executeRead<TrackEventRow[]>(
+      `SELECT trace_id, user_id, api_path, request_params, created_at
+       FROM operation_log
+       WHERE http_method = 'CLICK'
+         AND user_id = ?
+         AND created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+       ORDER BY created_at DESC
+       LIMIT 5000`,
+      [userId]
+    );
+
+    const actions: Record<string, number> = { click: 0, like: 0, favorite: 0, share: 0, dwell: 0 };
+    const targetMap = new Map<string, { resourceType: string; resourceId: string; count: number }>();
+    const activeHours = new Array<number>(24).fill(0);
+    let dwellTotal = 0;
+    let dwellCount = 0;
+
+    for (const row of rows) {
+      const params = parseTrackParams(row.request_params);
+      const action = String(params.action ?? 'click').toLowerCase();
+      // 五类行为之外的历史动作（view/detail/navigate 等）统一计入点击
+      if (action === 'like' || action === 'favorite' || action === 'share' || action === 'dwell') {
+        actions[action] += 1;
+      } else {
+        actions.click += 1;
+      }
+
+      if (action === 'dwell') {
+        const extra = params.extra && typeof params.extra === 'object'
+          ? (params.extra as Record<string, unknown>)
+          : {};
+        const duration = Number(params.duration ?? extra.duration ?? 0);
+        if (Number.isFinite(duration) && duration > 0) {
+          dwellTotal += duration;
+          dwellCount += 1;
+        }
+      }
+
+      const resourceType = String(params.resourceType ?? 'unknown');
+      // 兼容历史数据里的 poi-1001 形式，统一成数字 ID 方便关联景点名称
+      const resourceId = String(params.resourceId ?? '').replace(/^poi-/, '');
+      if (resourceId) {
+        const key = `${resourceType}:${resourceId}`;
+        const item = targetMap.get(key) ?? { resourceType, resourceId, count: 0 };
+        item.count += 1;
+        targetMap.set(key, item);
+      }
+
+      const created = row.created_at instanceof Date ? row.created_at : new Date(String(row.created_at));
+      const hour = created.getHours();
+      if (Number.isFinite(hour) && hour >= 0 && hour < 24) activeHours[hour] += 1;
+    }
+
+    // 资源 ID 是数字时补齐 POI 名称，画像里展示更直观
+    const poiIds = [...new Set(
+      [...targetMap.values()]
+        .filter(t => ['poi', 'poi-card', 'spot'].includes(t.resourceType) && /^\d+$/.test(t.resourceId))
+        .map(t => Number(t.resourceId))
+        .filter(id => Number.isFinite(id) && id > 0)
+    )];
+    const poiNameMap = new Map<number, string>();
+    if (poiIds.length > 0) {
+      const placeholders = poiIds.map(() => '?').join(',');
+      const poiRows = await executeRead<Array<{ id: number; name: string }>>(
+        `SELECT id, name FROM poi WHERE id IN (${placeholders})`,
+        poiIds
+      );
+      for (const poi of poiRows) poiNameMap.set(Number(poi.id), poi.name);
+    }
+
+    const totalEvents = rows.length;
+    const rate = (count: number): number => totalEvents > 0 ? Math.round((count / totalEvents) * 100) : 0;
+
+    const topTargets = [...targetMap.values()]
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8)
+      .map(t => ({
+        ...t,
+        name: poiNameMap.get(Number(t.resourceId)) ?? (t.resourceType === 'poi' ? `景点#${t.resourceId}` : t.resourceType),
+      }));
+
+    const avgDwellSeconds = dwellCount > 0 ? Math.round(dwellTotal / dwellCount) : 0;
+
+    const tags: Array<{ label: string; weight: number }> = [];
+    if (totalEvents >= 10) tags.push({ label: '高频活跃', weight: Math.min(100, totalEvents * 5) });
+    if (actions.like > 0) tags.push({ label: '偏好点赞', weight: rate(actions.like) });
+    if (actions.favorite > 0) tags.push({ label: '收藏倾向', weight: rate(actions.favorite) });
+    if (actions.share > 0) tags.push({ label: '分享传播', weight: rate(actions.share) });
+    if (avgDwellSeconds >= 30) tags.push({ label: '深度浏览', weight: Math.min(100, avgDwellSeconds) });
+    if (topTargets[0]) tags.push({ label: `偏好${topTargets[0].name}`, weight: rate(topTargets[0].count) });
+    tags.sort((a, b) => b.weight - a.weight);
+
+    res.json({
+      code: 0,
+      message: 'ok',
+      data: {
+        userId,
+        days,
+        totalEvents,
+        clickCount: actions.click,
+        likeCount: actions.like,
+        favoriteCount: actions.favorite,
+        shareCount: actions.share,
+        dwellCount: actions.dwell,
+        avgDwellSeconds,
+        lastActiveAt: rows[0]?.created_at ?? null,
+        activeHours,
+        topTargets,
+        tags,
+        recentEvents: rows.slice(0, 10).map(r => {
+          const params = parseTrackParams(r.request_params);
+          return {
+            action: String(params.action ?? 'click'),
+            resourceType: String(params.resourceType ?? ''),
+            resourceId: String(params.resourceId ?? ''),
+            pagePath: r.api_path,
+            createdAt: r.created_at,
+          };
+        }),
+        updatedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    log.ERROR(`用户画像聚合失败: ${String(error)}`);
+    res.status(500).json({ code: ErrorCodeEnum.INTERNAL_ERROR, message: '用户画像聚合失败' });
+  }
+});
+
+// =============================================================================
 // 推荐铺垫接口（规则版，基于 operation_log 聚合）
 // =============================================================================
 

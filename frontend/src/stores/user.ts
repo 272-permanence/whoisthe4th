@@ -21,12 +21,32 @@ export interface UserInfo {
 const TOKEN_KEY = 'whoisthe4th_token';
 const USER_KEY = 'whoisthe4th_user';
 
+/**
+ * 恢复登录用户：兼容模拟登录（whoisthe4th_user）与真实登录（user）
+ * 真实登录写入的是 { id, username, nickname, role }，需要转换成 UserInfo
+ */
+function readStoredUser(): UserInfo | null {
+  const raw = localStorage.getItem(USER_KEY) || localStorage.getItem('user');
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (parsed.id === undefined || parsed.username === undefined) return null;
+    const role: UserRole = parsed.role === 'admin' || parsed.role === 'operator' ? parsed.role : 'visitor';
+    return {
+      id: String(parsed.id),
+      username: String(parsed.username),
+      displayName: typeof parsed.nickname === 'string' ? parsed.nickname : String(parsed.username),
+      role,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export const useUserStore = defineStore('user', () => {
-  // 从 localStorage 恢复登录态（兼容 api/auth.ts 的 token/user 键）
+  // 从 localStorage 恢复登录态
   const token = ref<string>(localStorage.getItem(TOKEN_KEY) || localStorage.getItem('token') || '');
-  const userInfo = ref<UserInfo | null>(
-    JSON.parse(localStorage.getItem(USER_KEY) || localStorage.getItem('user') || 'null')
-  );
+  const userInfo = ref<UserInfo | null>(readStoredUser());
 
   const isLoggedIn = computed(() => !!token.value);
   const isAdmin = computed(() => userInfo.value?.role === 'admin' || userInfo.value?.role === 'operator');

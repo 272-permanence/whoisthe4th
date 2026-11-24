@@ -1,4 +1,4 @@
-﻿﻿﻿﻿<script setup lang="ts">
+<script setup lang="ts">
 /**
  * @file 数据运营大屏
  * @author 第八组
@@ -7,34 +7,9 @@
  */
 import { ref, onMounted, onBeforeUnmount, shallowRef, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
-// 【性能优化】ECharts 按需引入：只打包实际用到的柱状图/饼图/折线图及必要组件
-import * as echarts from 'echarts/core';
-import { BarChart, PieChart, LineChart } from 'echarts/charts';
-import {
-  TitleComponent,
-  TooltipComponent,
-  GridComponent,
-  LegendComponent,
-  AxisPointerComponent,
-} from 'echarts/components';
-import { CanvasRenderer } from 'echarts/renderers';
+import * as echarts from 'echarts';
 import { getStats, connectStatsStream, type AnalyticsStats } from '../api/analytics';
 import { apiFetch } from '../common/apiClient';
-
-echarts.use([
-  BarChart,
-  PieChart,
-  LineChart,
-  TitleComponent,
-  TooltipComponent,
-  GridComponent,
-  LegendComponent,
-  AxisPointerComponent,
-  CanvasRenderer,
-]);
-
-/** ECharts 实例类型（按需引入后核心包不提供实例类型命名空间，改用 init 返回值推导） */
-type EChartsInstance = ReturnType<typeof echarts.init>;
 
 const router = useRouter();
 
@@ -44,9 +19,9 @@ function goBack(): void {
 }
 
 // ==================== 日志审计相关 ====================
-const activeTab = ref<'stats' | 'audit'>('stats');
+const activeTab = ref<'stats' | 'audit' | 'profile'>('stats');
 
-const hotPoisChart = shallowRef<EChartsInstance | null>(null);
+const hotPoisChart = shallowRef<echarts.ECharts | null>(null);
 const hotPois = ref<{ poiId: number; name: string; visitCount: number }[]>([]);
 
 const abnormalLogins = ref<{ ip: string; failCount: number; firstFail: string; lastFail: string }[]>([]);
@@ -81,11 +56,11 @@ function renderHotPoisChart() {
   const names = hotPois.value.map(p => p.name);
   const counts = hotPois.value.map(p => p.visitCount);
   hotPoisChart.value.setOption({
-    title: { text: '热门景点 TOP10', left: 'center', textStyle: { color: '#303A35', fontSize: 16 } },
+    title: { text: '热门景点 TOP10', left: 'center', textStyle: { color: '#fff', fontSize: 16 } },
     tooltip: { trigger: 'axis' },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: names, axisLabel: { color: '#A5AAA5', interval: 0, rotate: 30 } },
-    yAxis: { type: 'value', axisLabel: { color: '#A5AAA5' } },
+    xAxis: { type: 'category', data: names, axisLabel: { color: '#ccc', interval: 0, rotate: 30 } },
+    yAxis: { type: 'value', axisLabel: { color: '#ccc' } },
     series: [{
       type: 'bar',
       data: counts,
@@ -144,6 +119,177 @@ async function switchToAudit() {
   }
 }
 
+// ==================== 用户画像相关 ====================
+interface ProfileUser {
+  userId: number;
+  eventCount: number;
+  lastActive: string;
+}
+
+interface UserProfile {
+  userId: number;
+  days: number;
+  totalEvents: number;
+  clickCount: number;
+  likeCount: number;
+  favoriteCount: number;
+  shareCount: number;
+  dwellCount: number;
+  avgDwellSeconds: number;
+  lastActiveAt: string | null;
+  activeHours: number[];
+  topTargets: { resourceType: string; resourceId: string; name: string; count: number }[];
+  tags: { label: string; weight: number }[];
+  recentEvents: { action: string; resourceType: string; resourceId: string; pagePath: string; createdAt: string }[];
+  updatedAt: string;
+}
+
+const profileUsers = ref<ProfileUser[]>([]);
+const selectedUserId = ref<number>(readInitialUserId());
+const profile = ref<UserProfile | null>(null);
+const profileLoading = ref(false);
+const profileError = ref('');
+const profileActionChart = shallowRef<echarts.ECharts | null>(null);
+const profileHourChart = shallowRef<echarts.ECharts | null>(null);
+
+/** 默认选中当前登录用户，读不到时回落到 1 */
+function readInitialUserId(): number {
+  try {
+    const raw = localStorage.getItem('whoisthe4th_user') || localStorage.getItem('user');
+    const parsed = raw ? (JSON.parse(raw) as { id?: unknown }) : null;
+    const id = Number(parsed?.id);
+    if (Number.isFinite(id) && id >= 0) return id;
+  } catch {
+    // 解析失败使用默认值
+  }
+  return 1;
+}
+
+/** 加载有埋点数据的用户列表 */
+async function loadProfileUsers(): Promise<void> {
+  try {
+    const data = await apiFetch<ProfileUser[]>('/users', { apiPrefix: '/api/v1/analytics' });
+    profileUsers.value = data;
+    if (data.length > 0 && !data.some(u => u.userId === selectedUserId.value)) {
+      selectedUserId.value = data[0].userId;
+    }
+  } catch (e) {
+    console.error('[Profile] 用户列表加载失败', e);
+  }
+}
+
+/** 加载单个用户的行为画像 */
+async function loadProfile(): Promise<void> {
+  profileLoading.value = true;
+  profileError.value = '';
+  try {
+    profile.value = await apiFetch<UserProfile>(
+      `/users/profile?userId=${selectedUserId.value}&days=7`,
+      { apiPrefix: '/api/v1/analytics' }
+    );
+    await nextTick();
+    renderProfileCharts();
+  } catch (e) {
+    profileError.value = e instanceof Error ? e.message : '画像加载失败';
+  } finally {
+    profileLoading.value = false;
+  }
+}
+
+/** 渲染画像的两张图：行为分布 + 活跃时段 */
+function renderProfileCharts(): void {
+  const data = profile.value;
+  if (!data) return;
+
+  const actionEl = document.getElementById('profile-action-chart');
+  if (actionEl) {
+    // v-if 切走再切回会重建 DOM，旧实例必须丢弃
+    if (!profileActionChart.value || profileActionChart.value.getDom() !== actionEl) {
+      profileActionChart.value?.dispose();
+      profileActionChart.value = echarts.init(actionEl);
+    }
+    profileActionChart.value.setOption({
+      title: { text: '行为分布', left: 'center', textStyle: { color: '#fff', fontSize: 16 } },
+      tooltip: { trigger: 'axis' },
+      grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+      xAxis: { type: 'category', data: ['点击', '点赞', '收藏', '分享', '停留'], axisLabel: { color: '#ccc' } },
+      yAxis: { type: 'value', axisLabel: { color: '#ccc' }, minInterval: 1 },
+      series: [{
+        type: 'bar',
+        barWidth: '46%',
+        data: [
+          { value: data.clickCount, itemStyle: { color: '#4fc3f7' } },
+          { value: data.likeCount, itemStyle: { color: '#ff9c6e' } },
+          { value: data.favoriteCount, itemStyle: { color: '#faad14' } },
+          { value: data.shareCount, itemStyle: { color: '#36cfc9' } },
+          { value: data.dwellCount, itemStyle: { color: '#b37feb' } },
+        ],
+      }],
+    });
+  }
+
+  const hourEl = document.getElementById('profile-hour-chart');
+  if (hourEl) {
+    if (!profileHourChart.value || profileHourChart.value.getDom() !== hourEl) {
+      profileHourChart.value?.dispose();
+      profileHourChart.value = echarts.init(hourEl);
+    }
+    profileHourChart.value.setOption({
+      title: { text: '活跃时段分布', left: 'center', textStyle: { color: '#fff', fontSize: 16 } },
+      tooltip: { trigger: 'axis' },
+      grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+      xAxis: {
+        type: 'category',
+        data: Array.from({ length: 24 }, (_, i) => `${i}时`),
+        axisLabel: { color: '#ccc', interval: 2 },
+      },
+      yAxis: { type: 'value', axisLabel: { color: '#ccc' }, minInterval: 1 },
+      series: [{
+        type: 'line',
+        smooth: true,
+        data: data.activeHours,
+        areaStyle: { color: 'rgba(79, 195, 247, 0.2)' },
+        lineStyle: { color: '#4fc3f7', width: 2 },
+        itemStyle: { color: '#4fc3f7' },
+      }],
+    });
+  }
+}
+
+/** 切换到用户画像 tab */
+async function switchToProfile(): Promise<void> {
+  activeTab.value = 'profile';
+  await nextTick();
+  await loadProfileUsers();
+  await loadProfile();
+}
+
+/** 点击用户 chip 切换画像对象 */
+function selectProfileUser(userId: number): void {
+  if (selectedUserId.value === userId) return;
+  selectedUserId.value = userId;
+  void loadProfile();
+}
+
+/** 行为类型中文名 */
+function actionLabel(action: string): string {
+  const map: Record<string, string> = {
+    click: '点击',
+    like: '点赞',
+    favorite: '收藏',
+    share: '分享',
+    dwell: '停留',
+  };
+  return map[action] ?? action;
+}
+
+/** 时间格式化 */
+function formatTime(value: string | null): string {
+  if (!value) return '-';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('zh-CN', { hour12: false });
+}
+
 const totalVisits = ref(0);
 const todayVisits = ref(0);
 const updatedAt = ref('');
@@ -156,11 +302,11 @@ const lfResolvedCount = ref(0);
 const lfLostCount = ref(0);
 const lfFoundCount = ref(0);
 
-const sentimentChart = shallowRef<EChartsInstance | null>(null);
-const hotChart = shallowRef<EChartsInstance | null>(null);
-const trendChart = shallowRef<EChartsInstance | null>(null);
-const lfStatusChart = shallowRef<EChartsInstance | null>(null);
-const lfCategoryChart = shallowRef<EChartsInstance | null>(null);
+const sentimentChart = shallowRef<echarts.ECharts | null>(null);
+const hotChart = shallowRef<echarts.ECharts | null>(null);
+const trendChart = shallowRef<echarts.ECharts | null>(null);
+const lfStatusChart = shallowRef<echarts.ECharts | null>(null);
+const lfCategoryChart = shallowRef<echarts.ECharts | null>(null);
 
 let closeStream: (() => void) | null = null;
 
@@ -183,6 +329,8 @@ onBeforeUnmount(() => {
   lfStatusChart.value?.dispose();
   lfCategoryChart.value?.dispose();
   hotPoisChart.value?.dispose();
+  profileActionChart.value?.dispose();
+  profileHourChart.value?.dispose();
 });
 
 /**
@@ -230,8 +378,8 @@ function updateLfStatusChart(
 ) {
   lfStatusChart.value?.setOption({
     title: [
-      { text: '失物招领状态分布', left: '25%', top: '5%', textStyle: { color: '#303A35', fontSize: 14 } },
-      { text: '丢失 vs 捡到', left: '75%', top: '5%', textStyle: { color: '#303A35', fontSize: 14 } }
+      { text: '失物招领状态分布', left: '25%', top: '5%', textStyle: { color: '#fff', fontSize: 14 } },
+      { text: '丢失 vs 捡到', left: '75%', top: '5%', textStyle: { color: '#fff', fontSize: 14 } }
     ],
     tooltip: { trigger: 'item' },
     series: [
@@ -239,7 +387,7 @@ function updateLfStatusChart(
         type: 'pie',
         radius: ['30%', '55%'],
         center: ['25%', '60%'],
-        label: { color: '#303A35' },
+        label: { color: '#fff' },
         data: [
           { value: statusDist.open, name: '待处理', itemStyle: { color: '#faad14' } },
           { value: statusDist.resolved, name: '已解决', itemStyle: { color: '#52c41a' } },
@@ -250,7 +398,7 @@ function updateLfStatusChart(
         type: 'pie',
         radius: ['30%', '55%'],
         center: ['75%', '60%'],
-        label: { color: '#303A35' },
+        label: { color: '#fff' },
         data: [
           { value: typeDist.lost, name: '丢失', itemStyle: { color: '#ff4d4f' } },
           { value: typeDist.found, name: '捡到', itemStyle: { color: '#1890ff' } }
@@ -268,17 +416,17 @@ function updateLfCategoryChart(categories: AnalyticsStats['lostFound']['topCateg
   const counts = categories.map(c => c.count);
 
   lfCategoryChart.value?.setOption({
-    title: { text: '失物招领热门分类 TOP5', left: 'center', textStyle: { color: '#303A35', fontSize: 16 } },
+    title: { text: '失物招领热门分类 TOP5', left: 'center', textStyle: { color: '#fff', fontSize: 16 } },
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
     grid: { left: '3%', right: '6%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'value', axisLabel: { color: '#A5AAA5' } },
-    yAxis: { type: 'category', data: names, axisLabel: { color: '#A5AAA5' } },
+    xAxis: { type: 'value', axisLabel: { color: '#ccc' } },
+    yAxis: { type: 'category', data: names, axisLabel: { color: '#ccc' } },
     series: [{
       type: 'bar',
       data: counts,
       itemStyle: { color: '#b37feb' },
       barWidth: '50%',
-      label: { show: true, position: 'right', color: '#303A35' }
+      label: { show: true, position: 'right', color: '#fff' }
     }]
   });
 }
@@ -288,13 +436,13 @@ function updateLfCategoryChart(categories: AnalyticsStats['lostFound']['topCateg
  */
 function updateSentimentChart(dist: AnalyticsStats['sentimentDist']) {
   sentimentChart.value?.setOption({
-    title: { text: '用户情感分布', left: 'center', textStyle: { color: '#303A35', fontSize: 16 } },
+    title: { text: '用户情感分布', left: 'center', textStyle: { color: '#fff', fontSize: 16 } },
     tooltip: { trigger: 'item' },
-    legend: { bottom: 0, textStyle: { color: '#A5AAA5' } },
+    legend: { bottom: 0, textStyle: { color: '#ccc' } },
     series: [{
       type: 'pie',
       radius: ['40%', '70%'],
-      label: { color: '#303A35' },
+      label: { color: '#fff' },
       data: [
         { value: dist.positive, name: '正面', itemStyle: { color: '#52c41a' } },
         { value: dist.neutral, name: '中性', itemStyle: { color: '#1890ff' } },
@@ -312,11 +460,11 @@ function updateHotChart(questions: AnalyticsStats['hotQuestions']) {
   const counts = questions.map(q => q.count);
 
   hotChart.value?.setOption({
-    title: { text: '热门问答 TOP10', left: 'center', textStyle: { color: '#303A35', fontSize: 16 } },
+    title: { text: '热门问答 TOP10', left: 'center', textStyle: { color: '#fff', fontSize: 16 } },
     tooltip: { trigger: 'axis' },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: names, axisLabel: { color: '#A5AAA5', interval: 0, rotate: 30 } },
-    yAxis: { type: 'value', axisLabel: { color: '#A5AAA5' } },
+    xAxis: { type: 'category', data: names, axisLabel: { color: '#ccc', interval: 0, rotate: 30 } },
+    yAxis: { type: 'value', axisLabel: { color: '#ccc' } },
     series: [{
       type: 'bar',
       data: counts,
@@ -334,11 +482,11 @@ function updateTrendChart(trend: AnalyticsStats['hourlyTrend']) {
   const counts = trend.map(t => t.count);
 
   trendChart.value?.setOption({
-    title: { text: '近 24 小时问答量趋势', left: 'center', textStyle: { color: '#303A35', fontSize: 16 } },
+    title: { text: '近 24 小时问答量趋势', left: 'center', textStyle: { color: '#fff', fontSize: 16 } },
     tooltip: { trigger: 'axis' },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: hours, axisLabel: { color: '#A5AAA5' } },
-    yAxis: { type: 'value', axisLabel: { color: '#A5AAA5' } },
+    xAxis: { type: 'category', data: hours, axisLabel: { color: '#ccc' } },
+    yAxis: { type: 'value', axisLabel: { color: '#ccc' } },
     series: [{
       type: 'line',
       data: counts,
@@ -357,6 +505,8 @@ function resizeCharts() {
   lfStatusChart.value?.resize();
   lfCategoryChart.value?.resize();
   hotPoisChart.value?.resize();
+  profileActionChart.value?.resize();
+  profileHourChart.value?.resize();
 }
 </script>
 
@@ -386,6 +536,11 @@ function resizeCharts() {
         :class="{ active: activeTab === 'audit' }"
         @click="switchToAudit"
       >日志审计</button>
+      <button
+        class="tab-btn"
+        :class="{ active: activeTab === 'profile' }"
+        @click="switchToProfile"
+      >用户画像</button>
     </nav>
 
     <!-- 数据运营 Tab -->
@@ -501,16 +656,122 @@ function resizeCharts() {
       </div>
     </section>
     </template>
+
+    <!-- 用户画像 Tab -->
+    <template v-if="activeTab === 'profile'">
+    <section class="profile-toolbar">
+      <div class="user-chips">
+        <span class="profile-hint">选择用户：</span>
+        <button
+          v-for="user in profileUsers"
+          :key="user.userId"
+          class="user-chip"
+          :class="{ active: selectedUserId === user.userId }"
+          @click="selectProfileUser(user.userId)"
+        >
+          用户 #{{ user.userId }}<em>{{ user.eventCount }}</em>
+        </button>
+        <span v-if="profileUsers.length === 0" class="profile-hint">
+          暂无埋点数据，请先在移动端点几个景点、点赞或收藏
+        </span>
+      </div>
+      <button class="trace-btn" :disabled="profileLoading" @click="loadProfile">
+        {{ profileLoading ? '加载中...' : '刷新画像' }}
+      </button>
+    </section>
+
+    <p v-if="profileError" class="empty-tip">{{ profileError }}</p>
+
+    <section v-if="profile" class="stat-cards profile-cards">
+      <div class="card">
+        <div class="card-label">行为总数</div>
+        <div class="card-value">{{ profile.totalEvents }}</div>
+        <div class="card-sub">近 {{ profile.days }} 天</div>
+      </div>
+      <div class="card">
+        <div class="card-label">点击</div>
+        <div class="card-value">{{ profile.clickCount }}</div>
+      </div>
+      <div class="card">
+        <div class="card-label">点赞</div>
+        <div class="card-value">{{ profile.likeCount }}</div>
+      </div>
+      <div class="card">
+        <div class="card-label">收藏</div>
+        <div class="card-value">{{ profile.favoriteCount }}</div>
+      </div>
+      <div class="card">
+        <div class="card-label">分享</div>
+        <div class="card-value">{{ profile.shareCount }}</div>
+      </div>
+      <div class="card">
+        <div class="card-label">平均停留</div>
+        <div class="card-value">{{ profile.avgDwellSeconds }}<span class="card-unit">秒</span></div>
+        <div class="card-sub">停留 {{ profile.dwellCount }} 次</div>
+      </div>
+    </section>
+
+    <section v-if="profile" class="charts">
+      <div class="chart-box">
+        <div id="profile-action-chart" class="chart"></div>
+      </div>
+      <div class="chart-box">
+        <div id="profile-hour-chart" class="chart"></div>
+      </div>
+
+      <div class="chart-box">
+        <h3 class="audit-title">画像标签</h3>
+        <div v-if="profile.tags.length === 0" class="empty-tip">暂无标签，多产生一些行为后再看</div>
+        <div v-else class="tag-list">
+          <span v-for="tag in profile.tags" :key="tag.label" class="tag-chip">
+            {{ tag.label }}<b>{{ tag.weight }}</b>
+          </span>
+        </div>
+
+        <h3 class="audit-title tag-subtitle">偏好对象 TOP</h3>
+        <div v-if="profile.topTargets.length === 0" class="empty-tip">暂无偏好对象</div>
+        <table v-else class="audit-table">
+          <thead>
+            <tr><th>对象</th><th>类型</th><th>次数</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in profile.topTargets" :key="`${item.resourceType}:${item.resourceId}`">
+              <td>{{ item.name }}</td>
+              <td>{{ item.resourceType }}</td>
+              <td>{{ item.count }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="chart-box">
+        <h3 class="audit-title">最近行为</h3>
+        <div v-if="profile.recentEvents.length === 0" class="empty-tip">暂无行为记录</div>
+        <table v-else class="audit-table">
+          <thead>
+            <tr><th>行为</th><th>对象</th><th>页面</th><th>时间</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="(item, idx) in profile.recentEvents" :key="idx">
+              <td>{{ actionLabel(item.action) }}</td>
+              <td>{{ item.resourceType }}#{{ item.resourceId }}</td>
+              <td>{{ item.pagePath }}</td>
+              <td>{{ formatTime(item.createdAt) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    </template>
   </div>
 </template>
 
 <style scoped>
 .dashboard {
-  min-height: 100%;
-  background: #F7F6F2;
-  padding: 0;
-  color: #303A35;
-  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+  padding: 24px;
+  color: #fff;
 }
 
 .dashboard-header {
@@ -527,176 +788,469 @@ function resizeCharts() {
   min-width: 0;
 }
 
+/* 返回按钮：与大屏整体一致的深色玻璃拟态 */
 .back-btn {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 5px 14px;
-  background: #FFFFFF;
-  border: 1px solid #E8E8E2;
-  border-radius: 6px;
-  color: #526F61;
-  font-size: 13px;
+  gap: 3px;
+  padding: 6px 14px 6px 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  color: #e0e0e0;
+  font-size: 14px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.2s;
   white-space: nowrap;
-  height: 32px;
 }
-.back-btn:hover { background: #E9EFEA; }
-.back-arrow { font-size: 16px; line-height: 1; }
+
+.back-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.back-arrow {
+  font-size: 18px;
+  line-height: 1;
+  transform: translateY(-1px);
+}
 
 .dashboard-header h1 {
   margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #303A35;
+  font-size: 24px;
+  letter-spacing: 2px;
+  color: #fff;
 }
 
-.update-time { color: #7B827D; font-size: 13px; }
+.update-time {
+  color: #8c8c8c;
+  font-size: 14px;
+}
 
 .stat-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 16px;
+  display: flex;
+  gap: 24px;
   margin-bottom: 24px;
 }
 
 .card {
-  background: #FFFFFF;
-  border: 1px solid #E8E8E2;
-  border-radius: 8px;
-  padding: 20px 20px;
+  flex: 1;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
 }
 
-.card-label { font-size: 13px; color: #7B827D; margin-bottom: 10px; }
-.card-value { font-size: 30px; font-weight: 600; color: #526F61; font-variant-numeric: tabular-nums; }
-.card-unit { font-size: 14px; color: #7B827D; margin: 0 2px; }
-.card-sub { margin-top: 4px; font-size: 12px; color: #A5AAA5; }
+.card-label {
+  font-size: 16px;
+  color: #bfbfbf;
+  margin-bottom: 12px;
+}
+
+.card-value {
+  font-size: 42px;
+  font-weight: bold;
+  color: #36cfc9;
+}
+
+.card-unit {
+  font-size: 20px;
+  margin-left: 4px;
+  color: #8c8c8c;
+}
+
+.card-sub {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #8c8c8c;
+}
 
 .charts {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 24px;
 }
 
 .chart-box {
-  background: #FFFFFF;
-  border: 1px solid #E8E8E2;
-  border-radius: 8px;
-  padding: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 16px;
 }
 
-.chart { width: 100%; height: 320px; }
-.full-width { grid-column: span 2; }
+.chart {
+  width: 100%;
+  height: 320px;
+}
 
+.full-width {
+  grid-column: span 2;
+}
+
+/* Tab 切换 */
 .tab-nav {
   display: flex;
-  gap: 0;
+  gap: 12px;
   margin-bottom: 24px;
-  border-bottom: 1px solid #E8E8E2;
 }
 
 .tab-btn {
-  padding: 10px 22px;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: #7B827D;
-  font-size: 14px;
+  padding: 8px 24px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  color: #bfbfbf;
+  font-size: 15px;
   cursor: pointer;
-  transition: all 0.15s;
-  font-family: inherit;
+  transition: all 0.2s;
 }
-.tab-btn:hover { color: #303A35; }
+
+.tab-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
 .tab-btn.active {
-  color: #526F61;
-  border-bottom-color: #526F61;
-  font-weight: 500;
+  background: #1890ff;
+  border-color: #1890ff;
+  color: #fff;
 }
 
-.audit-title { margin: 0 0 14px 0; font-size: 16px; font-weight: 600; color: #303A35; }
+/* 日志审计 */
+.audit-title {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  color: #fff;
+}
 
-.audit-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.audit-table th, .audit-table td {
-  padding: 12px 14px;
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.audit-table th,
+.audit-table td {
+  padding: 10px 12px;
   text-align: left;
-  border-bottom: 1px solid #EEEEE8;
-  color: #303A35;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e0e0e0;
 }
-.audit-table th { color: #A5AAA5; font-weight: 500; font-size: 13px; }
-.audit-table .danger { color: #C45F55; font-weight: 600; }
-.empty-tip { color: #A5AAA5; text-align: center; padding: 28px 0; font-size: 14px; }
 
-.trace-query { display: flex; gap: 10px; margin-bottom: 16px; }
+.audit-table th {
+  color: #8c8c8c;
+  font-weight: normal;
+}
+
+.audit-table .danger {
+  color: #ff4d4f;
+  font-weight: bold;
+}
+
+.empty-tip {
+  color: #8c8c8c;
+  text-align: center;
+  padding: 24px 0;
+}
+
+/* Trace 查询 */
+.trace-query {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
 
 .trace-input {
   flex: 1;
   padding: 8px 12px;
-  background: #FFFFFF;
-  border: 1px solid #E8E8E2;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 6px;
-  color: #303A35;
+  color: #fff;
   font-size: 14px;
-  height: 36px;
-  font-family: inherit;
 }
-.trace-input::placeholder { color: #A5AAA5; }
+
+.trace-input::placeholder {
+  color: #8c8c8c;
+}
 
 .trace-btn {
-  padding: 0 20px;
-  background: #526F61;
+  padding: 8px 20px;
+  background: #1890ff;
   border: none;
   border-radius: 6px;
-  color: #FFFFFF;
+  color: #fff;
   cursor: pointer;
   font-size: 14px;
-  height: 36px;
-  transition: background 0.15s;
-  font-family: inherit;
 }
-.trace-btn:hover { background: #425C50; }
-.trace-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.trace-result { border-top: 1px solid #E8E8E2; padding-top: 14px; }
-.trace-summary { color: #7B827D; font-size: 14px; margin-bottom: 14px; }
-.trace-summary b { color: #526F61; font-weight: 600; }
+.trace-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 
-.trace-timeline { max-height: 320px; overflow-y: auto; }
+.trace-result {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 12px;
+}
+
+.trace-summary {
+  color: #bfbfbf;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.trace-summary b {
+  color: #36cfc9;
+}
+
+.trace-timeline {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
 .trace-item {
   display: flex;
   gap: 12px;
   align-items: center;
   padding: 8px 0;
-  border-bottom: 1px solid #F5F5F1;
-  font-size: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 13px;
 }
-.trace-time { color: #A5AAA5; white-space: nowrap; font-family: monospace; font-size: 12px; }
-.trace-tag { padding: 2px 10px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
-.type-operation .trace-tag { background: #DCE5DD; color: #526F61; }
-.type-error .trace-tag { background: #F2DFDF; color: #C45F55; }
-.type-login .trace-tag { background: #DDE7DF; color: #4E8A68; }
-.trace-detail { color: #303A35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+.trace-time {
+  color: #8c8c8c;
+  white-space: nowrap;
+  font-family: monospace;
+}
+
+.trace-tag {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.type-operation .trace-tag {
+  background: rgba(24, 144, 255, 0.2);
+  color: #40a9ff;
+}
+
+.type-error .trace-tag {
+  background: rgba(255, 77, 79, 0.2);
+  color: #ff7875;
+}
+
+.type-login .trace-tag {
+  background: rgba(82, 196, 26, 0.2);
+  color: #73d13d;
+}
+
+.trace-detail {
+  color: #e0e0e0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 用户画像 */
+.profile-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.user-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.profile-hint {
+  color: #8c8c8c;
+  font-size: 13px;
+}
+
+.user-chip {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: #bfbfbf;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.user-chip em {
+  font-style: normal;
+  margin-left: 6px;
+  color: #36cfc9;
+}
+
+.user-chip.active {
+  border-color: #1890ff;
+  background: rgba(24, 144, 255, 0.18);
+  color: #fff;
+}
+
+.profile-cards {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 16px;
+}
+
+.profile-cards .card {
+  padding: 18px 12px;
+}
+
+.profile-cards .card-label {
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.profile-cards .card-value {
+  font-size: 32px;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tag-chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(79, 195, 247, 0.14);
+  border: 1px solid rgba(79, 195, 247, 0.35);
+  color: #9fdcff;
+  font-size: 13px;
+}
+
+.tag-chip b {
+  margin-left: 6px;
+  color: #4fc3f7;
+}
+
+.tag-subtitle {
+  margin-top: 20px;
+}
+
+/* 移动端适配：窄屏下单列布局，卡片两列排布 */
 @media (max-width: 768px) {
-  .dashboard { padding: 0; }
-  .dashboard-header { flex-direction: column; align-items: stretch; gap: 8px; margin-bottom: 14px; }
-  .header-left { gap: 8px; }
-  .dashboard-header h1 { font-size: 15px; }
-  .stat-cards { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
-  .card { padding: 14px; }
-  .card-value { font-size: 24px; }
-  .charts { grid-template-columns: 1fr; gap: 10px; }
-  .full-width { grid-column: span 1; }
-  .chart { height: 240px; }
-  .tab-nav { gap: 0; margin-bottom: 14px; }
-  .tab-btn { flex: 1; padding: 8px 0; font-size: 13px; text-align: center; }
-  .chart-box { overflow-x: auto; padding: 14px; }
-  .audit-table { min-width: 400px; font-size: 13px; }
-  .audit-table th, .audit-table td { padding: 8px 10px; }
+  .dashboard {
+    padding: 12px 10px 20px;
+  }
+
+  .dashboard-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+
+  .header-left {
+    gap: 8px;
+  }
+
+  .dashboard-header h1 {
+    font-size: 15px;
+    letter-spacing: 0;
+    line-height: 1.3;
+  }
+
+  .back-btn {
+    flex-shrink: 0;
+    padding: 5px 11px 5px 8px;
+    font-size: 13px;
+  }
+
+  .update-time {
+    font-size: 12px;
+    padding-left: 2px;
+  }
+
+  .stat-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .profile-toolbar {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .profile-cards {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .card {
+    padding: 14px 8px;
+    border-radius: 10px;
+  }
+
+  .card-label {
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+
+  .card-value {
+    font-size: 26px;
+  }
+
+  .charts {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .full-width {
+    grid-column: span 1;
+  }
+
+  .chart {
+    height: 240px;
+  }
+
+  .tab-nav {
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .tab-btn {
+    flex: 1;
+    padding: 8px 0;
+    text-align: center;
+    font-size: 14px;
+  }
+
+  /* 审计表格窄屏下横向滚动，避免列被挤碎 */
+  .chart-box {
+    overflow-x: auto;
+  }
+
+  .audit-table {
+    min-width: 460px;
+    font-size: 12px;
+  }
+
+  .audit-table th,
+  .audit-table td {
+    padding: 8px 6px;
+  }
+
+  .trace-query {
+    flex-wrap: nowrap;
+  }
 }
 </style>
 
 <style>
+/* 大屏页面需要铺满浏览器宽度，覆盖全局 #app 的 1126px 固定宽度限制 */
 #app:has(.dashboard) {
   width: 100%;
   max-width: 100%;
@@ -705,4 +1259,3 @@ function resizeCharts() {
   text-align: left;
 }
 </style>
-
