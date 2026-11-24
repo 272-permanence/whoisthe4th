@@ -462,8 +462,9 @@ function afterLogin(result: LoginResult) {
   userStore.setUserInfo({
     id: String(result.user.id),
     username: result.user.username,
-    displayName: result.user.displayName ?? result.user.username,
-    role: result.user.role,
+    displayName: result.user.username,
+    // 接口只回 'admin' | 'user'，这里映射到前端 UserRole
+    role: result.user.role === 'admin' ? 'admin' : 'visitor',
   });
 
   const redirect = route.query.redirect as string | undefined;
