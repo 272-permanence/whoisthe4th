@@ -1,6 +1,7 @@
 ﻿<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
+import QRCode from 'qrcode';
 import {
   loginApi,
   registerApi,
@@ -268,9 +269,11 @@ async function handlePhoneLogin() {
   }
 }
 
-// ========================== 微信扫码（模拟） ==========================
+// ========================== 微信扫码（演示：真机扫 / 按钮模拟 双通道） ==========================
 
 const qrScene = ref('');
+const qrUrl = ref('');           // 后端返回的真实 URL，用于生成可扫二维码
+const qrSvgHtml = ref('');       // qrcode 库生成的真实 SVG
 const qrStatus = ref<WechatQrStatus>('pending');
 const qrExpiresIn = ref(0);
 let qrTimer: ReturnType<typeof setInterval> | null = null;
@@ -284,53 +287,24 @@ const qrStatusText = computed(() => {
   return `请使用微信扫一扫（${qrExpiresIn.value}s 后失效）`;
 });
 
-const qrSvg = computed(() => buildQrSvg(qrScene.value || 'mock-qr'));
-
-function buildQrSvg(seedText: string): string {
-  const N = 21;
-  const cell = 8;
-  const pad = 4;
-  const total = N * cell + pad * 2;
-  let seed = 0;
-  for (const ch of seedText) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
-  const rand = () => {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    return seed / 0x7fffffff;
-  };
-  const inFinder = (x: number, y: number) => {
-    const box = (ox: number, oy: number) => x >= ox && x < ox + 7 && y >= oy && y < oy + 7;
-    return box(0, 0) || box(N - 7, 0) || box(0, N - 7);
-  };
-  const rect = (x: number, y: number, w: number, h: number, fill: string) =>
-    `<rect x="${pad + x * cell}" y="${pad + y * cell}" width="${w * cell}" height="${h * cell}" fill="${fill}"/>`;
-  let body = '';
-  for (let y = 0; y < N; y++) {
-    for (let x = 0; x < N; x++) {
-      if (inFinder(x, y)) continue;
-      if (rand() < 0.45) body += rect(x, y, 1, 1, '#1a2420');
-    }
-  }
-  const finder = (ox: number, oy: number) =>
-    rect(ox, oy, 7, 7, '#1a2420') + rect(ox + 1, oy + 1, 5, 5, '#ffffff') + rect(ox + 2, oy + 2, 3, 3, '#1a2420');
-  return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${total} ${total}" width="100%" height="100%">` +
-    `<rect width="${total}" height="${total}" fill="#ffffff"/>` +
-    body +
-    finder(0, 0) +
-    finder(N - 7, 0) +
-    finder(0, N - 7) +
-    '</svg>'
-  );
-}
-
 async function initWechatQr() {
   stopQrPolling();
   errorMsg.value = '';
   try {
     const data = await createWechatQrApi();
     qrScene.value = data.sceneId;
+    qrUrl.value = data.qrText;
     qrStatus.value = 'pending';
     qrExpiresIn.value = data.expiresIn;
+
+    // 用 qrcode 库生成真实可扫的 SVG
+    qrSvgHtml.value = await QRCode.toString(data.qrText, {
+      type: 'svg',
+      margin: 1,
+      width: 200,
+      color: { dark: '#1a2420', light: '#ffffff' }
+    });
+
     qrTimer = setInterval(pollQrStatus, 1500);
     qrTicker = setInterval(() => {
       if (qrExpiresIn.value > 0) qrExpiresIn.value -= 1;
@@ -708,7 +682,7 @@ onUnmounted(() => {
         <!-- 4. 微信扫码 -->
         <div v-else-if="method === 'wechat'" class="wechat-panel">
           <div class="qr-box">
-            <div class="qr-img" v-html="qrSvg"></div>
+            <div class="qr-img" v-html="qrSvgHtml"></div>
             <div v-if="qrStatus === 'scanned'" class="qr-mask">
               <span>已扫码<br />请在手机端确认</span>
             </div>
@@ -720,6 +694,8 @@ onUnmounted(() => {
           <p class="qr-status">{{ qrStatusText }}</p>
 
           <p v-if="errorMsg" class="error-bar form-error">{{ errorMsg }}</p>
+
+          <p class="hint">用手机微信扫一扫二维码登录。如果 localhost 手机扫不到，可以用下方按钮模拟</p>
 
           <div class="demo-actions">
             <button
@@ -739,8 +715,6 @@ onUnmounted(() => {
               模拟手机确认
             </button>
           </div>
-
-          <p class="hint">演示模式：无需真实微信，用上方按钮模拟手机端操作</p>
         </div>
 
         <!-- 4. 统一身份认证 -->

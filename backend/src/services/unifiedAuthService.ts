@@ -285,7 +285,16 @@ const MOCK_WECHAT_NICKNAME = '微信用户';
 
 /**
  * 创建扫码会话
- * @returns sceneId 供前端轮询；qrText 为二维码内容（mock 下不可真实扫描）
+ * @returns sceneId 供前端轮询；qrText 为二维码内容
+ *
+ * —— 演示流程（零资质）——
+ *   qrText = `${frontendUrl}/api/v1/auth/wechat/scan?sceneId=xxx`
+ *   用户手机微信扫一扫 → 打开这个 URL → 后端自动 confirm → 电脑端轮询看到登录
+ *
+ * —— 真实微信开放平台流程（需企业资质）——
+ *   qrText = `open.weixin.qq.com/connect/qrconnect?appid=真实值&redirect_uri=...&state=sceneId#wechat_redirect`
+ *   微信回调时带 code → 后端换 openid → match sceneId → 挂 login
+ *   这个分支在 createWechatQr 里留好位置，config.wechat.mock=false 时自动走真实 URL
  */
 export function createWechatQr(): { sceneId: string; qrText: string; expiresIn: number; mock: boolean } {
   const sceneId = `qr_${crypto.randomBytes(8).toString('hex')}`;
@@ -295,12 +304,27 @@ export function createWechatQr(): { sceneId: string; qrText: string; expiresIn: 
     createdAt: now,
     expiresAt: now + config.unified.wechat.qrTtlSec * 1000
   });
-  return {
-    sceneId,
-    qrText: `https://open.weixin.qq.com/connect/qrconnect?appid=${config.unified.wechat.appId || 'mock'}&state=${sceneId}`,
-    expiresIn: config.unified.wechat.qrTtlSec,
-    mock: config.unified.wechat.mock
-  };
+  const mock = config.unified.wechat.mock;
+
+  if (mock) {
+    // 演示模式：qrText 是后端 scan 回调 URL
+    // 用户手机微信扫这个 URL → 后端 GET /wechat/scan → 自动 confirm → 电脑端轮询看到
+    const scanUrl = `${config.frontendUrl.replace(/\/$/, '')}/api/v1/auth/wechat/scan?sceneId=${sceneId}`;
+    return { sceneId, qrText: scanUrl, expiresIn: config.unified.wechat.qrTtlSec, mock: true };
+  }
+
+  // 真实微信开放平台模式（需企业资质 + HTTPS 域名）
+  const appId = config.unified.wechat.appId || '';
+  const callback = `${config.frontendUrl.replace(/\/$/, '')}/api/v1/auth/wechat/callback`;
+  const realUrl =
+    `https://open.weixin.qq.com/connect/qrconnect` +
+    `?appid=${appId}` +
+    `&redirect_uri=${encodeURIComponent(callback)}` +
+    `&response_type=code` +
+    `&scope=snsapi_login` +
+    `&state=${sceneId}` +
+    `#wechat_redirect`;
+  return { sceneId, qrText: realUrl, expiresIn: config.unified.wechat.qrTtlSec, mock: false };
 }
 
 /** 取会话，过期自动标记 */

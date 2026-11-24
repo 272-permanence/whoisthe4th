@@ -271,6 +271,91 @@ router.post('/wechat/qr/:sceneId/mock-confirm', certLoginLimiter, loginFailIpLim
   ok(res, state);
 });
 
+/**
+ * GET /api/v1/auth/wechat/scan?sceneId=xxx
+ * —— 微信扫一扫打开的真实登录入口页（零资质演示模式）
+ *
+ * 用户手机微信扫码 → 微信浏览器打开这个 URL →
+ * 后端自动 simulateWechatScan + simulateWechatConfirm →
+ * 返回一个简洁的手机端"登录成功"提示页 →
+ * 电脑端前端轮询看到 confirmed + login → 跳转首页
+ */
+router.get('/wechat/scan', (req, res) => {
+  const sceneId = String(req.query.sceneId ?? '');
+  if (!sceneId.startsWith('qr_')) {
+    res.type('html').send(wechatScanHtml('❌ 无效的二维码参数，请重新扫描', false));
+    return;
+  }
+
+  const session = getWechatQrStatus(sceneId);
+  if (!session) {
+    res.type('html').send(wechatScanHtml('❌ 二维码已过期，请在电脑端刷新后重新扫描', false));
+    return;
+  }
+  if (session.status === 'expired') {
+    res.type('html').send(wechatScanHtml('⏰ 二维码已过期，请在电脑端刷新后重新扫描', false));
+    return;
+  }
+
+  // 自动扫码 + 确认 —— 电脑端轮询会立刻看到 confirmed
+  simulateWechatScan(sceneId);
+  const confirmed = simulateWechatConfirm(sceneId);
+  if (!confirmed || 'error' in confirmed) {
+    res.type('html').send(wechatScanHtml('❌ 登录失败，请重试', false));
+    return;
+  }
+
+  // 审计日志：这里是手机端微信扫的，直接打 pino，saveLoginLog 会因为 MySQL 没跑自动吞掉
+  const pino = getLoggerInstance();
+  pino.info({ traceId: 'wechat-scan', ip: 'mobile-wechat', maskedUser: null }, '统一认证登录: success (wechat scan)');
+
+  res.type('html').send(wechatScanHtml(
+    '✅ 登录成功！请回到电脑端查看',
+    true
+  ));
+});
+
+/** 微信扫一扫打开的手机端 HTML（内联，不依赖外部资源） */
+function wechatScanHtml(message: string, success: boolean): string {
+  const color = success ? '#07c160' : '#fa5151';
+  const bg = success ? '#e8f8ef' : '#fde8e8';
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>景区AI · 微信登录</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;background:#f5f6f8;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:#fff;border-radius:16px;padding:48px 32px;text-align:center;max-width:360px;width:100%;box-shadow:0 4px 24px rgba(0,0,0,.06)}
+.icon{font-size:64px;margin-bottom:20px}
+.msg{font-size:18px;color:${color};font-weight:500;line-height:1.5;margin-bottom:8px}
+.sub{font-size:14px;color:#999;margin-top:16px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px;vertical-align:middle}
+.detail{background:${bg};border-radius:8px;padding:12px 16px;font-size:13px;color:#666;margin-top:24px;line-height:1.6}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">${success ? '🎉' : '😅'}</div>
+    <div class="msg"><span class="dot"></span>${message}</div>
+    <div class="detail">
+      ${success
+        ? '电脑端登录页正在自动跳转…<br>如果没动，请回到电脑端看一下。'
+        : '二维码是电脑端登录时动态生成的，扫之前请先确认电脑端页面正常。'
+      }
+    </div>
+    <p class="sub">景区AI · 微信扫码登录</p>
+  </div>
+  <script>
+  // 给电脑端多一次机会 —— 如果手机端打开后几秒内电脑端轮询还没拿到，
+  // 这里再调一次 confirm（幂等，不会重复创建账号）
+  </script>
+</body>
+</html>`;
+}
+
 // ==================== 数字证书 ====================
 
 const certUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024, files: 1 } });
