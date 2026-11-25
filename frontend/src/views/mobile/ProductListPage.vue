@@ -8,18 +8,25 @@ import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { showLoadingToast, closeToast, showToast } from 'vant';
 import { fetchHomeProducts, type HomeProduct } from '../../api/home';
+import { listProductsApi, type Product } from '../../api/product';
 
 const router = useRouter();
-const list = ref<HomeProduct[]>([]);
+const list = ref<(HomeProduct | Product)[]>([]);
 const loading = ref(true);
-const categories = ['全部', '特产', '纪念品', '日用品', '食品', '文创'];
+const categories = ['全部', '文创', '纪念', '食品', '票券'];
 const activeCat = ref('全部');
 
 async function load() {
   showLoadingToast({ message: '加载中...', forbidClick: true, duration: 0 });
   try {
+    // 先试 home 聚合（MySQL），MySQL 没跑自动降级 product API（SQLite）
     const cat = activeCat.value === '全部' ? undefined : activeCat.value;
-    list.value = await fetchHomeProducts(cat);
+    try {
+      list.value = await fetchHomeProducts(cat);
+    } catch {
+      // home 挂了 → 降级 product API（SQLite seed 数据恒可用）
+      list.value = await listProductsApi(cat);
+    }
   } catch (err) {
     showToast((err as Error).message || '商品加载失败');
   } finally {

@@ -8,10 +8,11 @@ import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showToast, showLoadingToast, closeToast } from 'vant';
 import { fetchHomeProductDetail, toggleProductLike, toggleProductFavorite, type HomeProduct } from '../../api/home';
+import { getProductApi, type Product } from '../../api/product';
 
 const route = useRoute();
 const router = useRouter();
-const product = ref<HomeProduct | null>(null);
+const product = ref<(HomeProduct | Product) & Partial<HomeProduct>>({} as any);
 const loading = ref(true);
 const liked = ref(false);
 const favorited = ref(false);
@@ -24,7 +25,12 @@ async function load() {
   showLoadingToast({ message: '加载中...', forbidClick: true, duration: 0 });
   try {
     const id = Number(route.params.id);
-    product.value = await fetchHomeProductDetail(id);
+    // 先试 home 聚合（MySQL），MySQL 没跑自动降级 product API（SQLite）
+    try {
+      product.value = await fetchHomeProductDetail(id);
+    } catch {
+      product.value = await getProductApi(id);
+    }
   } catch (err) {
     showToast((err as Error).message || '商品加载失败');
   } finally {
@@ -61,7 +67,7 @@ onMounted(load);
 </script>
 
 <template>
-  <div class="product-detail" v-if="product">
+  <div class="product-detail" v-if="product?.name">
     <!-- 返回按钮 -->
     <button class="back-btn" type="button" @click="router.back()">
       <van-icon name="arrow-left" /> 返回

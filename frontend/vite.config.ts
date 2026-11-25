@@ -21,6 +21,8 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
+    // SPA history fallback — 直接访问 /products/1 等深链接不 404
+    historyApiFallback: true,
     proxy: {
       '/api': {
         target: 'http://localhost:8000',

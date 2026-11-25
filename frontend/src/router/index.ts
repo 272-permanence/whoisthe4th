@@ -140,14 +140,7 @@ const routes = [
     meta: { title: 'AI 导航' }
   },
 
-  // ============ 商品（成员C，移动端独立页面） ============
-  {
-    path: '/products',
-    name: 'product-list',
-    component: () => import('../views/mobile/ProductList.vue'),
-    meta: { title: '文创商城' },
-  },
-
+  // ============ 登录相关（成员C） ============
   {
     path: '/login',
     name: 'login',
