@@ -8,6 +8,7 @@ import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { showToast, showLoadingToast, closeToast } from 'vant';
 import { fetchHome, type HomeResponse } from '../../api/home';
+import { listProductsApi, type Product } from '../../api/product';
 
 const router = useRouter();
 
@@ -16,7 +17,8 @@ const banners = ref<HomeResponse['banners']>([]);
 const quickEntries = ref<HomeResponse['quickEntries']>([]);
 const hotPois = ref<HomeResponse['hotPois']>([]);
 const recommendedRoutes = ref<HomeResponse['recommendedRoutes']>([]);
-const hotProducts = ref<HomeResponse['hotProducts']>([]);
+// 商品推荐：优先用 home 聚合接口（MySQL），MySQL 没跑时独立拉 product API（SQLite，恒可用）
+const hotProducts = ref<Product[]>([]);
 const stats = ref<HomeResponse['stats']>({
   totalInteractions: 0,
   todayInteractions: 0,
@@ -26,13 +28,26 @@ const stats = ref<HomeResponse['stats']>({
 async function loadHome() {
   showLoadingToast({ message: '加载中...', forbidClick: true, duration: 0 });
   try {
-    const data = await fetchHome();
-    banners.value = data.banners ?? [];
-    quickEntries.value = data.quickEntries ?? [];
-    hotPois.value = data.hotPois ?? [];
-    recommendedRoutes.value = data.recommendedRoutes ?? [];
-    hotProducts.value = data.hotProducts ?? [];
-    stats.value = data.stats ?? stats.value;
+    // 并行拉：home 聚合 + 商品独立接口（MySQL 挂了也不影响商品展示）
+    const [homeData, products] = await Promise.allSettled([
+      fetchHome().then((d) => {
+        banners.value = d.banners ?? [];
+        quickEntries.value = d.quickEntries ?? [];
+        hotPois.value = d.hotPois ?? [];
+        recommendedRoutes.value = d.recommendedRoutes ?? [];
+        stats.value = d.stats ?? stats.value;
+        // home 里有 hotProducts 就用它，没有（或 home 挂了）下面会被 product API 兜底
+        if (d.hotProducts?.length) hotProducts.value = d.hotProducts as unknown as Product[];
+      }),
+      // 独立拉商品，取前 4 个做推荐位
+      listProductsApi().then((list) => {
+        if (!hotProducts.value.length) {
+          hotProducts.value = list.slice(0, 4);
+        }
+      }),
+    ]);
+    // home 整体失败但商品 OK → 静默，用户只看到商品区块
+    void homeData; void products;
   } catch (err) {
     showToast((err as Error).message || '首页加载失败');
   } finally {
@@ -42,6 +57,7 @@ async function loadHome() {
 }
 
 function go(path: string) {
+  // 只允许已注册的路由跳转
   const knownPaths = [
     '/home', '/interaction', '/lost-found', '/profile', '/admin/kb',
     '/qa', '/dashboard', '/routes', '/pois', '/navigate', '/products',
