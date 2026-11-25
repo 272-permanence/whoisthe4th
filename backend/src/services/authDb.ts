@@ -90,6 +90,18 @@ function initTables(database: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_product_category ON product(category);
     CREATE INDEX IF NOT EXISTS idx_product_name     ON product(name);
 
+    -- 商品点赞/收藏记录（同一用户对同一商品同一动作去重）
+    CREATE TABLE IF NOT EXISTS product_like (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_id INTEGER NOT NULL,
+      user_id    TEXT    NOT NULL DEFAULT 'anonymous',
+      action     TEXT    NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(product_id, user_id, action)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_product_like_pid ON product_like(product_id);
+
     -- CMS 内容表（content / adminContent 路由使用）
     CREATE TABLE IF NOT EXISTS content (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -121,6 +133,12 @@ function migrateSchema(db: Database.Database): void {
   addColumnIfNotExists(db, 'admin_user', 'wechat_openid', 'TEXT');
   addColumnIfNotExists(db, 'admin_user', 'sso_uid', 'TEXT');
   addColumnIfNotExists(db, 'admin_user', 'cert_fingerprint', 'TEXT');
+
+  // 商品互动字段（首页热度排序 + 点赞收藏持久化，全站唯一商品数据源 = SQLite）
+  addColumnIfNotExists(db, 'product', 'like_count', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfNotExists(db, 'product', 'favorite_count', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfNotExists(db, 'product', 'sales', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfNotExists(db, 'product', 'status', 'INTEGER NOT NULL DEFAULT 1');
 
   // SQLite UNIQUE 索引允许 NULL，一个用户可绑多个外部身份通道
   try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_user_email ON admin_user(email)'); } catch { /* 忽略 */ }
@@ -258,6 +276,10 @@ export interface Product {
   stock: number;
   category: string | null;
   image_url: string | null;
+  like_count?: number;
+  favorite_count?: number;
+  sales?: number;
+  status?: number;
   created_at: string;
   updated_at: string;
 }
@@ -336,4 +358,52 @@ export function updateProduct(id: number, input: Partial<ProductInput>): number 
 export function deleteProduct(id: number): number {
   const info = getAuthDb().prepare('DELETE FROM product WHERE id = ?').run(id);
   return info.changes;
+}
+
+/** 首页热销商品：按点赞、销量排序（status=1 只取上架） */
+export function listHotProducts(limit = 6): Product[] {
+  return getAuthDb()
+    .prepare(
+      `SELECT * FROM product WHERE status = 1
+       ORDER BY like_count DESC, sales DESC, id ASC LIMIT ?`
+    )
+    .all(limit) as Product[];
+}
+
+/** 上架商品总数（首页统计用） */
+export function countProducts(): number {
+  const row = getAuthDb()
+    .prepare('SELECT COUNT(*) AS c FROM product WHERE status = 1')
+    .get() as { c: number };
+  return row?.c ?? 0;
+}
+
+/** 商品点赞/收藏切换（同一用户同一动作幂等，返回切换后的状态与计数） */
+export function toggleProductReaction(
+  productId: number,
+  userId: string,
+  action: 'like' | 'favorite'
+): { active: boolean; count: number } {
+  const db = getAuthDb();
+  const column = action === 'like' ? 'like_count' : 'favorite_count';
+  const existing = db
+    .prepare('SELECT id FROM product_like WHERE product_id = ? AND user_id = ? AND action = ?')
+    .get(productId, userId, action) as { id: number } | undefined;
+
+  if (existing) {
+    db.prepare('DELETE FROM product_like WHERE id = ?').run(existing.id);
+    db.prepare(`UPDATE product SET ${column} = MAX(${column} - 1, 0) WHERE id = ?`).run(productId);
+  } else {
+    db.prepare('INSERT OR IGNORE INTO product_like (product_id, user_id, action) VALUES (?, ?, ?)').run(
+      productId,
+      userId,
+      action
+    );
+    db.prepare(`UPDATE product SET ${column} = ${column} + 1 WHERE id = ?`).run(productId);
+  }
+
+  const row = db.prepare(`SELECT ${column} AS c FROM product WHERE id = ?`).get(productId) as
+    | { c: number }
+    | undefined;
+  return { active: !existing, count: row?.c ?? 0 };
 }
