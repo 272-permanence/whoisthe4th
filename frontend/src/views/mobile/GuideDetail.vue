@@ -1,18 +1,19 @@
 <script setup lang="ts">
 /**
- * @file 游玩攻略详情页（成员D）
- * @description 路线信息 + 途经 POI 步骤链 + 每个 POI 的停留时长与简介
+ * @file 游玩攻略详情页（成员D · 扩展：加"开始导航"按钮 + 景点可点击跳导航 + 样式修正）
+ * @description 路线信息 + 途经 POI 步骤链 + 每个 POI 的停留时长与简介 + 底部导航按钮
  * @author 第八组（成员D）
- * @date 2026-11-03
+ * @date 2026-11-25
  */
 import { ref, onMounted, computed } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { showToast, showLoadingToast, closeToast } from 'vant';
 import { fetchRouteDetail, type RouteDetail } from '../../api/guide';
-import { trackAutoBind } from '../../utils/track';
+import { trackAutoBind, trackClick } from '../../utils/track';
 import Avatar from '../../components/common/Avatar.vue';
 
 const route = useRoute();
+const router = useRouter();
 const detail = ref<RouteDetail | null>(null);
 const loading = ref(true);
 
@@ -47,10 +48,22 @@ async function load() {
   }
 }
 
-onMounted(() => {
-  load();
-  trackAutoBind();
-});
+/** 点击景点 → 跳到导航 */
+function goNavigateToPoi(poiName: string) {
+  trackClick('guide-detail-navigate-poi', 'guide-detail', { poiName });
+  router.push({ path: '/navigate', query: { target: poiName } });
+}
+
+/** 开始整条路线的导航：起点=第一个景点，终点=最后一个景点 */
+function startFullNavigation() {
+  if (!detail.value || detail.value.steps.length === 0) return;
+  trackClick('guide-detail-start-navigate', 'guide-detail', { routeId: detail.value.id });
+  const first = detail.value.steps[0].name;
+  const last = detail.value.steps[detail.value.steps.length - 1].name;
+  router.push({ path: '/navigate', query: { start: first, end: last, routeId: String(detail.value.id) } });
+}
+
+onMounted(() => { load(); trackAutoBind(); });
 </script>
 
 <template>
@@ -90,6 +103,7 @@ onMounted(() => {
         :key="step.poi_id"
         class="step-item"
         :data-track="`poi-step:${step.poi_id}`"
+        @click="goNavigateToPoi(step.name)"
       >
         <div class="step-seq">{{ step.seq }}</div>
         <div class="step-body">
@@ -103,17 +117,35 @@ onMounted(() => {
             <van-icon name="location-o" /> {{ step.location }}
           </div>
         </div>
+        <van-icon name="arrow" class="step-arrow" />
       </div>
     </van-cell-group>
+
+    <!-- 底部"开始导航"按钮（串起路线→导航→AI） -->
+    <div class="nav-bar">
+      <van-button
+        type="primary"
+        block
+        round
+        icon="location-o"
+        :disabled="detail.steps.length === 0"
+        @click="startFullNavigation"
+      >
+        开始整条路线导航
+      </van-button>
+      <p class="nav-hint">也可点击上方任一景点，单独导航前往</p>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .guide-detail {
-  padding-bottom: 32px;
+  padding-bottom: 140px;
 }
+
+/* 西湖墨绿主题统一（替换旧蓝色） */
 .route-header {
-  background: linear-gradient(135deg, #1989fa, #4db8ff);
+  background: linear-gradient(135deg, #526F61 0%, #8AA094 100%);
   color: #fff;
   padding: 24px 16px 20px;
 }
@@ -128,6 +160,7 @@ onMounted(() => {
   font-size: 13px;
   opacity: 0.9;
   margin-bottom: 10px;
+  flex-wrap: wrap;
 }
 .route-tags .van-tag {
   background: rgba(255, 255, 255, 0.25);
@@ -150,20 +183,25 @@ onMounted(() => {
 .steps-title {
   font-size: 14px;
   font-weight: 600;
+  color: var(--color-text, #303A35);
 }
 
 .step-item {
   display: flex;
+  align-items: center;
   gap: 12px;
   padding: 14px 12px;
-  border-bottom: 1px solid #f2f3f5;
+  border-bottom: 1px solid var(--color-border, #E8E8E2);
   position: relative;
+  cursor: pointer;
+  transition: background 0.15s;
 }
+.step-item:active { background: rgba(82, 111, 97, 0.05); }
 .step-seq {
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: #1989fa;
+  background: var(--color-primary, #526F61);
   color: #fff;
   font-size: 13px;
   font-weight: 600;
@@ -172,10 +210,7 @@ onMounted(() => {
   justify-content: center;
   flex-shrink: 0;
 }
-.step-body {
-  flex: 1;
-  min-width: 0;
-}
+.step-body { flex: 1; min-width: 0; }
 .step-head {
   display: flex;
   align-items: center;
@@ -185,33 +220,26 @@ onMounted(() => {
 .step-name {
   font-size: 15px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--color-text, #303A35);
 }
-.step-cat {
-  font-size: 12px;
-  color: #969799;
-  margin-top: 2px;
-}
+.step-cat { font-size: 12px; color: var(--color-text-2, #7B827D); margin-top: 2px; }
 .step-desc {
   font-size: 13px;
-  color: #646566;
+  color: var(--color-text-2, #7B827D);
   margin-top: 6px;
   line-height: 1.5;
 }
 .step-loc {
   font-size: 12px;
-  color: #969799;
+  color: var(--color-text-2, #7B827D);
   margin-top: 4px;
 }
-.step-loc .van-icon {
-  margin-right: 2px;
-}
+.step-loc .van-icon { margin-right: 2px; }
+.step-arrow { color: var(--color-text-3, #A5AAA5); flex-shrink: 0; }
 
-.no-steps {
-  padding: 16px 0;
-}
+.no-steps { padding: 16px 0; }
 
-/* 数字人导览员横条（成员A 公用 Avatar） */
+/* 数字人导览员横条 */
 .guide-detail__avatar-bar {
   display: flex;
   align-items: center;
@@ -219,12 +247,10 @@ onMounted(() => {
   padding: 12px 16px;
   margin: 12px 12px 4px;
   border-radius: 14px;
-  background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%);
-  border: 1px solid #dbeafe;
+  background: linear-gradient(135deg, #E9EFEA 0%, #F3F7F4 100%);
+  border: 1px solid #D6E1D9;
 }
-.guide-detail__avatar-bar :deep(.avatar) {
-  flex-shrink: 0;
-}
+.guide-detail__avatar-bar :deep(.avatar) { flex-shrink: 0; }
 .guide-detail__avatar-info {
   display: flex;
   flex-direction: column;
@@ -233,10 +259,30 @@ onMounted(() => {
 .guide-detail__avatar-name {
   font-size: 14px;
   font-weight: 600;
-  color: #1e40af;
+  color: var(--color-primary, #526F61);
 }
 .guide-detail__avatar-tip {
   font-size: 12px;
-  color: #3b82f6;
+  color: #8AA094;
+}
+
+/* 底部导航按钮栏 */
+.nav-bar {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 10;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  background: #FFFFFF;
+  border-top: 1px solid var(--color-border, #E8E8E2);
+}
+.nav-bar .van-button {
+  background: var(--color-primary, #526F61);
+  border-color: var(--color-primary, #526F61);
+}
+.nav-hint {
+  font-size: 11px;
+  color: var(--color-text-3, #A5AAA5);
+  text-align: center;
+  margin: 6px 0 0;
 }
 </style>

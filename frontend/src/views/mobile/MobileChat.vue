@@ -19,12 +19,17 @@ import type { ChatRole, ChatTurn } from '../../types/interaction';
 /** 常用问题快捷选项 */
 const PRESET_QUESTIONS = ['西湖有哪些必看景点？', '雷峰塔有什么历史故事？', '推荐一条两小时游览路线'];
 
+/** userId（匿名伪 ID，用于 analytics/log 去重） */
+const userId = 'u-' + (typeof sessionStorage !== 'undefined' ? (sessionStorage.getItem('anon_uid') || (() => { const v = Math.random().toString(36).slice(2, 10); sessionStorage.setItem('anon_uid', v); return v; })()) : Math.random().toString(36).slice(2, 10));
+
 const turns = ref<ChatTurn[]>([]);
 const isRecognizing = ref(false);
 const pipelineError = ref('');
 const inputText = ref('');
 /** 对话气泡滚动容器的 ref，用于自动滚到底 */
 const listRef = ref<HTMLElement | null>(null);
+/** 每轮 AI 回复的评分状态：{ turnId: 'positive' | 'negative' | null } */
+const ratedTurns = ref<Record<string, 'positive' | 'negative'>>({});
 
 /** 流式语音合成 */
 const {
@@ -144,6 +149,48 @@ function onSubmit(): void {
   askQuestion(inputText.value);
 }
 
+/**
+ * 主动好评/差评：调 analytics/log 带 userRating，直接记为显式情感反馈
+ * 一个 turn 只能评一次，已评的 turn 再点可切换
+ */
+async function onRate(turnId: string, rating: 'positive' | 'negative'): Promise<void> {
+  const current = ratedTurns.value[turnId];
+  // 同一操作再点一次 = 撤销；不同操作 = 切换
+  const effective: 'positive' | 'negative' | null = current === rating ? null : rating;
+
+  // 找到该 turn 对应的 user 提问（turns 数组里 turn 前面最近一个 user 气泡）
+  const idx = turns.value.findIndex(t => t.id === turnId);
+  let userMessage = '';
+  for (let i = idx - 1; i >= 0; i--) {
+    if (turns.value[i].role === 'user') { userMessage = turns.value[i].text; break; }
+  }
+  if (!userMessage) return;
+  const assistantReply = turns.value[idx]?.text ?? '';
+
+  try {
+    if (effective) {
+      ratedTurns.value[turnId] = effective;
+      await fetch('/api/v1/analytics/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          message: userMessage,
+          response: assistantReply,
+          scenicSpot: null,
+          userRating: effective,
+        }),
+      });
+      trackClick(`chat-${effective === 'positive' ? 'like' : 'dislike'}`, 'mobile-chat', { turnId });
+    } else {
+      delete ratedTurns.value[turnId];
+    }
+  } catch (err) {
+    // 埋点失败不影响主流程
+    console.warn('[chat] 评分上报失败', err);
+  }
+}
+
 onMounted(() => {
   trackAutoBind();
 });
@@ -179,9 +226,34 @@ onMounted(() => {
       <div
         v-for="turn in turns"
         :key="turn.id"
-        :class="['mobile-chat__bubble', turn.role === 'user' ? 'mobile-chat__bubble--user' : 'mobile-chat__bubble--assistant']"
+        :class="['mobile-chat__turn-wrapper', turn.role === 'user' ? 'mobile-chat__turn-wrapper--user' : 'mobile-chat__turn-wrapper--assistant']"
       >
-        {{ turn.text }}
+        <div
+          :class="['mobile-chat__bubble', turn.role === 'user' ? 'mobile-chat__bubble--user' : 'mobile-chat__bubble--assistant']"
+        >
+          {{ turn.text }}
+        </div>
+
+        <!-- assistant 气泡下方：👍👎 主动好评（用户消息不显示） -->
+        <div
+          v-if="turn.role === 'assistant'"
+          class="mobile-chat__rate-bar"
+        >
+          <button
+            class="mobile-chat__rate-btn"
+            :class="{ 'mobile-chat__rate-btn--active': ratedTurns[turn.id] === 'positive' }"
+            type="button"
+            title="好评"
+            @click="onRate(turn.id, 'positive')"
+          >👍 好评</button>
+          <button
+            class="mobile-chat__rate-btn"
+            :class="{ 'mobile-chat__rate-btn--active': ratedTurns[turn.id] === 'negative' }"
+            type="button"
+            title="差评"
+            @click="onRate(turn.id, 'negative')"
+          >👎 差评</button>
+        </div>
       </div>
 
       <!-- 空态提示 -->
@@ -325,6 +397,14 @@ onMounted(() => {
 }
 
 /* 气泡基础样式 */
+.mobile-chat__turn-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mobile-chat__turn-wrapper--user { align-items: flex-end; }
+.mobile-chat__turn-wrapper--assistant { align-items: flex-start; }
+
 .mobile-chat__bubble {
   max-width: 78%;
   padding: 10px 14px;
@@ -336,7 +416,6 @@ onMounted(() => {
 }
 
 .mobile-chat__bubble--user {
-  align-self: flex-end;
   background: #1989fa;
   color: #fff;
   border-bottom-right-radius: 4px;
@@ -344,13 +423,35 @@ onMounted(() => {
 }
 
 .mobile-chat__bubble--assistant {
-  align-self: flex-start;
   background: #fff;
   color: #333;
   border: 1px solid #ebedf0;
   border-bottom-left-radius: 4px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
 }
+
+/* 好评/差评按钮组 */
+.mobile-chat__rate-bar {
+  display: flex;
+  gap: 6px;
+  padding-left: 4px;
+}
+.mobile-chat__rate-btn {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #ebedf0;
+  background: #fff;
+  color: #969799;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.mobile-chat__rate-btn--active {
+  background: var(--color-primary, #526F61);
+  border-color: var(--color-primary, #526F61);
+  color: #fff;
+}
+.mobile-chat__rate-btn:active { transform: scale(0.94); }
 
 /* 空态 */
 .mobile-chat__empty {

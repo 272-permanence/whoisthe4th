@@ -134,15 +134,27 @@ async function isPushLeader(redis: Redis): Promise<boolean> {
  * 埋点采集：接收前端上报的交互日志，做情感分析后存入 MySQL
  */
 router.post('/log', async (req: Request, res: Response) => {
-  const { userId, message, response, scenicSpot } = req.body || {};
+  const { userId, message, response, scenicSpot, userRating } = req.body || {};
 
   if (!userId || !message) {
     res.status(400).json({ code: ErrorCodeEnum.INVALID_PARAM, message: 'userId 和 message 不能为空' });
     return;
   }
 
-  // 情感分析
-  const { score, label } = analyzeSentiment(message);
+  // 用户显式好评/差评优先，跳过词典分析
+  let score: number;
+  let label: 'positive' | 'neutral' | 'negative';
+  let model: string;
+  if (userRating === 'positive' || userRating === 'negative') {
+    label = userRating;
+    score = userRating === 'positive' ? 0.8 : -0.8;
+    model = 'user-explicit';
+  } else {
+    const s = analyzeSentiment(message);
+    score = s.score;
+    label = s.label;
+    model = 'lexicon-v1';
+  }
 
   // 写 MySQL interaction_log + sentiment_data
   const insertResult = await executeWrite<{ insertId: number }>(
@@ -152,7 +164,7 @@ router.post('/log', async (req: Request, res: Response) => {
   );
   await executeWrite(
     `INSERT INTO sentiment_data (log_id, score, label, model) VALUES (?, ?, ?, ?)`,
-    [insertResult.insertId, score, label, 'lexicon-v1']
+    [insertResult.insertId, score, label, model]
   );
 
   res.json({

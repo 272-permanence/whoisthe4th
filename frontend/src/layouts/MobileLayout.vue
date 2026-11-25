@@ -21,8 +21,8 @@ interface TabItem {
 
 const tabs: TabItem[] = [
   { label: '首页', to: '/home', icon: 'home-o' },
-  { label: 'AI导览', to: '/interaction', icon: 'chat-o' },
-  { label: '失物招领', to: '/lost-found', icon: 'goods-o' },
+  { label: 'AI导览', to: '/interaction', icon: 'service-o' },
+  { label: '失物招领', to: '/lost-found', icon: 'records' },
   { label: '我的', to: '/profile', icon: 'user-o' },
 ];
 

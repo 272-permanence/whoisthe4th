@@ -78,6 +78,20 @@ const routes = [
     meta: { title: '路线详情' },
   },
 
+  // ============ 商品详情（成员D，独立移动端页面 + 首页快捷入口） ============
+  {
+    path: '/products/:id',
+    name: 'product-detail',
+    component: () => import('../views/mobile/ProductDetail.vue'),
+    meta: { title: '商品详情' },
+  },
+  {
+    path: '/products',
+    name: 'product-list',
+    component: () => import('../views/mobile/ProductListPage.vue'),
+    meta: { title: '特色商品' },
+  },
+
   // ============ 导航相关（成员B，等 stash pop 时补完组件再加） ============
   // {
   //   path: '/pois',
