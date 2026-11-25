@@ -125,6 +125,15 @@ const routes = [
     component: () => import('../views/Navigate.vue'),
     meta: { title: 'AI 导航' }
   },
+
+  // ============ 商品（成员C，移动端独立页面） ============
+  {
+    path: '/products',
+    name: 'product-list',
+    component: () => import('../views/mobile/ProductList.vue'),
+    meta: { title: '文创商城' },
+  },
+
   {
     path: '/login',
     name: 'login',
