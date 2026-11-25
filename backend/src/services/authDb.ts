@@ -38,6 +38,7 @@ export function getAuthDb(): Database.Database {
     // tsx 运行时 pragma WAL 会导致 SQLITE_CANTOPEN，auth.db 暂不开启 WAL
     initTables(db);
     seedDefaultAdmin(db);
+    seedDefaultProducts(db);
   }
   return db;
 }
@@ -133,10 +134,6 @@ function migrateSchema(db: Database.Database): void {
 function seedDefaultAdmin(database: Database.Database): void {
   const count = database.prepare('SELECT COUNT(*) AS c FROM admin_user').get() as { c: number };
   if (count.c === 0) {
-    // 延迟导入避免循环依赖：这里用 bcryptjs hash 默认密码
-    // hash('admin123', 10) —— 预计算值（bcrypt 每次 salt 不同，但验证时自动匹配）
-    // 我们用 placeholder，让 authService 在 register 时才真正 hash
-    // 所以这里直接用 authService.hashPasswordSync
     void (async () => {
       const bcrypt = (await import('bcryptjs')).default;
       const hash = bcrypt.hashSync('admin123', 10);
@@ -148,6 +145,50 @@ function seedDefaultAdmin(database: Database.Database): void {
       logger.INFO('已创建默认管理员账户 admin / admin123');
     })();
   }
+}
+
+/** 首次启动时写入一批示例商品（文创/纪念/食品/票券 各若干） */
+function seedDefaultProducts(database: Database.Database): void {
+  const count = database.prepare('SELECT COUNT(*) AS c FROM product').get() as { c: number };
+  if (count.c > 0) return;
+
+  const rows = [
+    // 文创
+    ['景区地图冰箱贴', '磁吸冰箱贴，软胶材质，直径 6cm', 18.00, 200, '文创', null],
+    ['古风折扇', '绢布竹骨，景区限定图案', 88.00, 50, '文创', null],
+    ['手绘明信片套装', '10 张装，景区十景手绘版', 35.00, 300, '文创', null],
+    ['景区集章册', '打卡集章专用，A5 开本', 28.00, 150, '文创', null],
+    ['帆布 tote 包', '水洗棉帆布，景区 logo 印花', 65.00, 80, '文创', null],
+
+    // 纪念
+    ['铜质纪念币', '景区主题，配礼盒', 128.00, 30, '纪念', null],
+    ['珐琅钥匙扣', '金属珐琅款，可做伴手礼', 25.00, 500, '纪念', null],
+    ['徽章套装', '一套 5 枚，景区标志性图案', 48.00, 120, '纪念', null],
+    ['银饰吊坠', '925 银，景区塔影造型', 168.00, 0, '纪念', null],
+
+    // 食品
+    ['桂花糕礼盒', '传统手工糕点，景区特产', 58.00, 400, '食品', null],
+    ['高山云雾茶', '景区自产，250g 礼盒装', 188.00, 60, '食品', null],
+    ['水果蜜饯组合', '景区特色，3 瓶装', 42.00, 250, '食品', null],
+    ['农家葛根粉', '500g 袋装', 32.00, 180, '食品', null],
+
+    // 票券
+    ['景区通票（成人）', '含全部景点门票，当日有效', 120.00, 9999, '票券', null],
+    ['景区通票（学生）', '凭学生证入园，半价', 60.00, 9999, '票券', null],
+    ['观光车单程票', '景区内观光车单程', 10.00, 9999, '票券', null],
+    ['索道往返票', '上山索道往返，含保险', 80.00, 9999, '票券', null],
+  ] as const;
+
+  const stmt = database.prepare(
+    `INSERT INTO product (name, description, price, stock, category, image_url) VALUES (?, ?, ?, ?, ?, ?)`
+  );
+  const insertMany = database.transaction(
+    (items: readonly (readonly [string, string, number, number, string, string | null])[]) => {
+      for (const row of items) stmt.run(...row);
+    }
+  );
+  insertMany(rows);
+  logger.INFO(`已写入 ${rows.length} 条示例商品 seed`);
 }
 
 /** 关闭数据库（测试用） */
