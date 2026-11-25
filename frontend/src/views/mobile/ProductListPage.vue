@@ -1,38 +1,36 @@
 <script setup lang="ts">
 /**
- * @file 商品列表页（成员D · 新建）
- * @description 特色商品列表网格 + 分类筛选 + 点击进详情
+ * @file 商品列表页（成员C 用户端）
+ * @description 走 /api/v1/products，展示图片/名称/价格/库存/分类，支持分类筛选
  * @date 2026-11-25
  */
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { showLoadingToast, closeToast, showToast } from 'vant';
-import { fetchHomeProducts, type HomeProduct } from '../../api/home';
 import { listProductsApi, type Product } from '../../api/product';
 
 const router = useRouter();
-const list = ref<(HomeProduct | Product)[]>([]);
+const list = ref<Product[]>([]);
 const loading = ref(true);
 const categories = ['全部', '文创', '纪念', '食品', '票券'];
 const activeCat = ref('全部');
 
 async function load() {
+  loading.value = true;
   showLoadingToast({ message: '加载中...', forbidClick: true, duration: 0 });
   try {
-    // 先试 home 聚合（MySQL），MySQL 没跑自动降级 product API（SQLite）
     const cat = activeCat.value === '全部' ? undefined : activeCat.value;
-    try {
-      list.value = await fetchHomeProducts(cat);
-    } catch {
-      // home 挂了 → 降级 product API（SQLite seed 数据恒可用）
-      list.value = await listProductsApi(cat);
-    }
+    list.value = await listProductsApi(cat);
   } catch (err) {
     showToast((err as Error).message || '商品加载失败');
   } finally {
     closeToast();
     loading.value = false;
   }
+}
+
+function goDetail(id: number) {
+  router.push(`/shop/${id}`);
 }
 
 function goDetail(id: number) {
@@ -69,9 +67,18 @@ onMounted(load);
         </div>
         <div class="product-card__body">
           <div class="product-card__name">{{ p.name }}</div>
+          <div class="product-card__meta">
+            <span class="product-card__cat" v-if="p.category">{{ p.category }}</span>
+            <span class="product-card__stock">库存 {{ p.stock }}</span>
+          </div>
           <div class="product-card__bottom">
             <span class="product-card__price">¥{{ p.price.toFixed(2) }}</span>
-            <span class="product-card__stats" v-if="p.like_count">❤️ {{ p.like_count }}</span>
+          </div>
+          <!-- 互动按钮区（预留，埋点由成员B接入；@click.stop 防止触发卡片跳转） -->
+          <div class="product-card__actions" @click.stop>
+            <button class="act-btn" type="button"><van-icon name="good-job-o" /><span>点赞</span></button>
+            <button class="act-btn" type="button"><van-icon name="star-o" /><span>收藏</span></button>
+            <button class="act-btn" type="button"><van-icon name="share-o" /><span>分享</span></button>
           </div>
         </div>
       </div>
@@ -159,8 +166,43 @@ onMounted(load);
   font-weight: 700;
   color: var(--color-danger, #C45F55);
 }
-.product-card__stats {
-  font-size: 12px;
+.product-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.product-card__cat {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(82, 111, 97, 0.1);
+  color: var(--color-primary, #526F61);
+}
+.product-card__stock {
+  font-size: 11px;
   color: var(--color-text-2, #7B827D);
+}
+/* 互动按钮区（预留，埋点由成员B接入） */
+.product-card__actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--color-border, #E8E8E2);
+}
+.act-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 0;
+  background: transparent;
+  border: none;
+  color: var(--color-text-2, #7B827D);
+  font-size: 12px;
+  cursor: pointer;
 }
 </style>

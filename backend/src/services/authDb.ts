@@ -39,6 +39,7 @@ export function getAuthDb(): Database.Database {
     initTables(db);
     seedDefaultAdmin(db);
     seedDefaultProducts(db);
+    backfillProductImages(db);
   }
   return db;
 }
@@ -207,6 +208,22 @@ function seedDefaultProducts(database: Database.Database): void {
   );
   insertMany(rows);
   logger.INFO(`已写入 ${rows.length} 条示例商品 seed`);
+}
+
+/** 给没有图片的历史商品按分类补一张示意图（幂等，只补空值） */
+function backfillProductImages(database: Database.Database): void {
+  const categoryImages: Record<string, string> = {
+    文创: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=%E6%99%AF%E5%8C%BA%E6%96%87%E5%88%9B%E5%95%86%E5%93%81%20%E5%86%B0%E7%AE%B1%E8%B4%B4%20%E6%98%8E%E4%BF%A1%E7%89%87%20%E6%96%87%E5%88%9B%E5%91%A8%E8%BE%B9&image_size=square_hd',
+    纪念: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=%E6%99%AF%E5%8C%BA%E7%BA%AA%E5%BF%B5%E5%B8%81%20%E5%BE%BD%E7%AB%A0%20%E9%92%A5%E5%8C%99%E6%89%A3%20%E7%BA%AA%E5%BF%B5%E5%93%81&image_size=square_hd',
+    食品: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=%E6%99%AF%E5%8C%BA%E7%89%B9%E4%BA%A7%20%E6%A1%82%E8%8A%B1%E7%B3%95%20%E8%8C%B6%E5%8F%B6%20%E7%A4%BC%E7%9B%92&image_size=square_hd',
+    票券: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=%E6%99%AF%E5%8C%BA%E9%97%A8%E7%A5%A8%20%E9%80%9A%E7%A5%A8%20%E7%A5%A8%E5%88%B8&image_size=square_hd',
+  };
+  const stmt = database.prepare(
+    `UPDATE product SET image_url = ? WHERE category = ? AND (image_url IS NULL OR image_url = '')`
+  );
+  for (const [category, url] of Object.entries(categoryImages)) {
+    stmt.run(url, category);
+  }
 }
 
 /** 关闭数据库（测试用） */

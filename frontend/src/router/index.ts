@@ -78,19 +78,22 @@ const routes = [
     meta: { title: '路线详情' },
   },
 
-  // ============ 商品详情（成员D，独立移动端页面 + 首页快捷入口） ============
+  // ============ 商品（成员C 用户端：/shop 为准，/products 保留兼容） ============
   {
-    path: '/products/:id',
-    name: 'product-detail',
+    path: '/shop/:id',
+    name: 'shop-detail',
     component: () => import('../views/mobile/ProductDetail.vue'),
     meta: { title: '商品详情' },
   },
   {
-    path: '/products',
-    name: 'product-list',
+    path: '/shop',
+    name: 'shop-list',
     component: () => import('../views/mobile/ProductListPage.vue'),
     meta: { title: '特色商品' },
   },
+  // 兼容旧链接：首页快捷入口「特色商品」与首页商品卡片仍用 /products
+  { path: '/products', redirect: '/shop' },
+  { path: '/products/:id', redirect: (to) => `/shop/${to.params.id}` },
 
   // ============ 导航相关（成员B，等 stash pop 时补完组件再加） ============
   // {

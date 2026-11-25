@@ -1,65 +1,29 @@
 <script setup lang="ts">
 /**
- * @file 商品详情页（成员D · 新建）
- * @description 商品图 + 名称 + 价格 + 描述 + 点赞 + 收藏 + 返回
+ * @file 商品详情页（成员C 用户端）
+ * @description 走 /api/v1/products/:id，展示名称/价格/库存/描述/图片
  * @date 2026-11-25
  */
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showToast, showLoadingToast, closeToast } from 'vant';
-import { fetchHomeProductDetail, toggleProductLike, toggleProductFavorite, type HomeProduct } from '../../api/home';
 import { getProductApi, type Product } from '../../api/product';
 
 const route = useRoute();
 const router = useRouter();
-const product = ref<(HomeProduct | Product) & Partial<HomeProduct>>({} as any);
+const product = ref<Product | null>(null);
 const loading = ref(true);
-const liked = ref(false);
-const favorited = ref(false);
-const userId = 'u-' + (Math.random().toString(36).slice(2, 10)); // 匿名伪 ID
-
-const likeCount = computed(() => (product.value?.like_count ?? 0) + (liked.value ? 1 : 0));
-const favoriteCount = computed(() => (product.value?.favorite_count ?? 0) + (favorited.value ? 1 : 0));
 
 async function load() {
   showLoadingToast({ message: '加载中...', forbidClick: true, duration: 0 });
   try {
     const id = Number(route.params.id);
-    // 先试 home 聚合（MySQL），MySQL 没跑自动降级 product API（SQLite）
-    try {
-      product.value = await fetchHomeProductDetail(id);
-    } catch {
-      product.value = await getProductApi(id);
-    }
+    product.value = await getProductApi(id);
   } catch (err) {
     showToast((err as Error).message || '商品加载失败');
   } finally {
     closeToast();
     loading.value = false;
-  }
-}
-
-async function onLike() {
-  if (!product.value) return;
-  try {
-    const res = await toggleProductLike(product.value.id, userId);
-    liked.value = res.liked;
-    product.value.like_count = res.likeCount;
-    showToast(res.liked ? '已点赞 ❤️' : '已取消点赞');
-  } catch (err) {
-    showToast((err as Error).message || '点赞失败');
-  }
-}
-
-async function onFavorite() {
-  if (!product.value) return;
-  try {
-    const res = await toggleProductFavorite(product.value.id, userId);
-    favorited.value = res.favorited;
-    product.value.favorite_count = res.favoriteCount;
-    showToast(res.favorited ? '已收藏 ⭐' : '已取消收藏');
-  } catch (err) {
-    showToast((err as Error).message || '收藏失败');
   }
 }
 
@@ -99,28 +63,23 @@ onMounted(load);
       <div class="product-price">¥{{ product.price.toFixed(2) }}</div>
     </div>
 
-    <!-- 底部操作栏：点赞 + 收藏 -->
+    <!-- 底部操作栏：点赞 / 收藏 / 分享（预留静态按钮，埋点由成员B接入） -->
     <footer class="product-footer">
-      <button
-        class="footer-btn"
-        :class="{ 'footer-btn--active': liked }"
-        type="button"
-        @click="onLike"
-      >
-        <van-icon :name="liked ? 'good-job' : 'good-job-o'" />
-        <span>{{ likeCount }}</span>
+      <button class="footer-btn" type="button">
+        <van-icon name="good-job-o" />
+        <span>{{ product.like_count ?? 0 }}</span>
         <small>点赞</small>
       </button>
 
-      <button
-        class="footer-btn"
-        :class="{ 'footer-btn--active': favorited }"
-        type="button"
-        @click="onFavorite"
-      >
-        <van-icon :name="favorited ? 'star' : 'star-o'" />
-        <span>{{ favoriteCount }}</span>
+      <button class="footer-btn" type="button">
+        <van-icon name="star-o" />
+        <span>{{ product.favorite_count ?? 0 }}</span>
         <small>收藏</small>
+      </button>
+
+      <button class="footer-btn" type="button">
+        <van-icon name="share-o" />
+        <small>分享</small>
       </button>
 
       <div class="footer-buy">
